@@ -5,66 +5,53 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="theme-color" content="#FAF9F7">
   <title>Financial Agency</title>
-  
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Source+Serif+4:wght@400;500&display=swap" rel="stylesheet">
-  
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: 'DM Sans', sans-serif; 
+      -webkit-font-smoothing: antialiased;
       -webkit-tap-highlight-color: transparent;
     }
-    
-    html, body {
-      height: 100%;
-      overflow: hidden;
+    input, textarea, button { font-family: inherit; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
-    
-    body {
-      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #FAF9F7;
-      color: #2D3436;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
     }
-    
-    #root {
-      height: 100%;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
+    @keyframes celebrate {
+      0% { transform: scale(0.8); opacity: 0; }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); opacity: 1; }
     }
-    
-    ::selection {
-      background: #E8F0E6;
-      color: #2D3436;
+    @keyframes confetti {
+      0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(-100px) rotate(360deg); opacity: 0; }
     }
-    
-    textarea::placeholder {
-      color: #B2BEC3;
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
     }
-    
-    /* Prevent iOS zoom on input focus */
-    input, textarea {
-      font-size: 16px !important;
+    .celebrate-enter {
+      animation: celebrate 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
     }
   </style>
 </head>
 <body>
   <div id="root"></div>
-  
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
-    // Soft, calming color palette
+    // Theme
     const theme = {
       bg: '#FAF9F7',
       bgCard: '#FFFFFF',
@@ -76,9 +63,74 @@
       accentHover: '#3D5636',
       border: '#E8E6E3',
       shadow: '0 2px 20px rgba(0,0,0,0.06)',
+      celebration: '#F0FDF4',
+      celebrationAccent: '#22C55E',
     };
 
-    // Gentle fade-in animation
+    // Session storage helpers
+    const Storage = {
+      save: (data) => {
+        try {
+          localStorage.setItem('financial-agency-session', JSON.stringify(data));
+        } catch (e) {
+          console.log('Storage not available');
+        }
+      },
+      load: () => {
+        try {
+          const data = localStorage.getItem('financial-agency-session');
+          return data ? JSON.parse(data) : null;
+        } catch (e) {
+          return null;
+        }
+      },
+      clear: () => {
+        try {
+          localStorage.removeItem('financial-agency-session');
+        } catch (e) {}
+      }
+    };
+
+    // Micro-step sequences by journey type
+    const microStepSequences = {
+      behind: [
+        { step: 1, action: "Check your bank balance right now. Just look — no judgment.", time: "30 seconds" },
+        { step: 2, action: "Find one purchase from last week that surprised you.", time: "2 minutes" },
+        { step: 3, action: "Add up what you spent on food last week.", time: "5 minutes" },
+        { step: 4, action: "Move $5 to savings. Just $5.", time: "1 minute" },
+        { step: 5, action: "Set up a $20/week auto-transfer to savings.", time: "5 minutes" },
+      ],
+      clarity: [
+        { step: 1, action: "Open your bank app and look at your balance. That's it.", time: "30 seconds" },
+        { step: 2, action: "Scroll through last week's transactions. Notice anything?", time: "3 minutes" },
+        { step: 3, action: "Pick one category — food, subscriptions, or shopping. Add it up.", time: "5 minutes" },
+        { step: 4, action: "Cancel one subscription you forgot you had.", time: "2 minutes" },
+        { step: 5, action: "Track that one category for the next week.", time: "ongoing" },
+      ],
+      control: [
+        { step: 1, action: "Write down: 'What does being in control with money mean to me?'", time: "2 minutes" },
+        { step: 2, action: "Check your balance and say out loud: 'I have $X.'", time: "30 seconds" },
+        { step: 3, action: "List three bills and when they're due.", time: "3 minutes" },
+        { step: 4, action: "Set calendar reminders for those three bills.", time: "2 minutes" },
+        { step: 5, action: "Move $10 to savings. You decided. You did it.", time: "1 minute" },
+      ],
+      specific: [
+        { step: 1, action: "Write down the specific thing that's stressing you out.", time: "1 minute" },
+        { step: 2, action: "What's the actual number? Find out.", time: "5 minutes" },
+        { step: 3, action: "Break it into smaller pieces. What's the first piece?", time: "3 minutes" },
+        { step: 4, action: "Take one action on that first piece today.", time: "varies" },
+        { step: 5, action: "Set a reminder to check in on this tomorrow.", time: "1 minute" },
+      ],
+      uncertain: [
+        { step: 1, action: "Check your bank balance. Just to see.", time: "30 seconds" },
+        { step: 2, action: "What's one thing you wish was different about money?", time: "2 minutes" },
+        { step: 3, action: "Find one small surprise in your recent spending.", time: "3 minutes" },
+        { step: 4, action: "Move $5 somewhere — savings, a bill, anything intentional.", time: "1 minute" },
+        { step: 5, action: "Notice how that felt. Write one sentence about it.", time: "1 minute" },
+      ],
+    };
+
+    // Components
     const FadeIn = ({ children, delay = 0 }) => {
       const [visible, setVisible] = useState(false);
       useEffect(() => {
@@ -89,7 +141,7 @@
       return (
         <div style={{
           opacity: visible ? 1 : 0,
-          transform: visible ? 'translateY(0)' : 'translateY(12px)',
+          transform: visible ? 'translateY(0)' : 'translateY(10px)',
           transition: 'opacity 0.5s ease, transform 0.5s ease',
         }}>
           {children}
@@ -97,178 +149,71 @@
       );
     };
 
-    // Choice button component
-    const ChoiceButton = ({ children, onClick, selected, subtle }) => {
-      const [hover, setHover] = useState(false);
-      
-      return (
-        <button
-          onClick={onClick}
-          onMouseEnter={() => setHover(true)}
-          onMouseLeave={() => setHover(false)}
-          style={{
-            width: '100%',
-            padding: subtle ? '14px 18px' : '18px 22px',
-            marginBottom: '12px',
-            background: selected || hover ? theme.accentLight : theme.bgCard,
-            border: `1.5px solid ${selected || hover ? theme.accent : theme.border}`,
-            borderRadius: '12px',
-            fontSize: subtle ? '15px' : '16px',
-            fontFamily: "'Source Serif 4', Georgia, serif",
-            color: theme.textPrimary,
-            cursor: 'pointer',
-            textAlign: 'left',
-            transition: 'all 0.2s ease',
-            boxShadow: selected ? 'none' : theme.shadow,
-            WebkitAppearance: 'none',
-          }}
-        >
-          {children}
-        </button>
-      );
-    };
-
-    // Primary action button
-    const PrimaryButton = ({ children, onClick, disabled }) => {
-      const [hover, setHover] = useState(false);
-      
-      return (
-        <button
-          onClick={onClick}
-          disabled={disabled}
-          onMouseEnter={() => setHover(true)}
-          onMouseLeave={() => setHover(false)}
-          style={{
-            width: '100%',
-            padding: '16px 24px',
-            background: disabled ? theme.textMuted : (hover ? theme.accentHover : theme.accent),
-            border: 'none',
-            borderRadius: '12px',
-            fontSize: '16px',
-            fontWeight: '500',
-            fontFamily: "'DM Sans', sans-serif",
-            color: '#FFFFFF',
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            transition: 'all 0.2s ease',
-            marginTop: '8px',
-            WebkitAppearance: 'none',
-          }}
-        >
-          {children}
-        </button>
-      );
-    };
-
-    // Secondary/subtle button
-    const SecondaryButton = ({ children, onClick }) => (
+    const ChoiceButton = ({ children, onClick, selected, secondary }) => (
       <button
         onClick={onClick}
         style={{
-          background: 'none',
-          border: 'none',
-          fontSize: '14px',
-          fontFamily: "'DM Sans', sans-serif",
-          color: theme.textSecondary,
+          width: '100%',
+          padding: '16px 20px',
+          marginBottom: '12px',
+          background: selected ? theme.accentLight : (secondary ? 'transparent' : theme.bgCard),
+          border: `1.5px solid ${selected ? theme.accent : theme.border}`,
+          borderRadius: '12px',
+          fontSize: '16px',
+          color: selected ? theme.accent : theme.textPrimary,
           cursor: 'pointer',
-          padding: '12px',
-          textDecoration: 'underline',
-          textDecorationColor: theme.border,
-          textUnderlineOffset: '3px',
-          WebkitAppearance: 'none',
+          textAlign: 'left',
+          transition: 'all 0.2s ease',
+          boxShadow: secondary ? 'none' : theme.shadow,
         }}
       >
         {children}
       </button>
     );
 
-    // Text input with gentle styling
-    const TextInput = ({ value, onChange, placeholder, onSubmit }) => {
-      const [focused, setFocused] = useState(false);
-      
-      return (
-        <div style={{ position: 'relative' }}>
-          <textarea
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            style={{
-              width: '100%',
-              minHeight: '100px',
-              padding: '16px',
-              background: theme.bgCard,
-              border: `1.5px solid ${focused ? theme.accent : theme.border}`,
-              borderRadius: '12px',
-              fontSize: '16px',
-              fontFamily: "'Source Serif 4', Georgia, serif",
-              color: theme.textPrimary,
-              resize: 'none',
-              outline: 'none',
-              boxSizing: 'border-box',
-              WebkitAppearance: 'none',
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && value.trim()) {
-                e.preventDefault();
-                onSubmit();
-              }
-            }}
-          />
-        </div>
-      );
-    };
-
-    // Progress indicator
-    const ProgressDots = ({ current, total }) => (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        gap: '8px',
-        marginBottom: '32px',
-      }}>
-        {Array.from({ length: total }).map((_, i) => (
-          <div
-            key={i}
-            style={{
-              width: i === current ? '24px' : '8px',
-              height: '8px',
-              borderRadius: '4px',
-              background: i <= current ? theme.accent : theme.border,
-              transition: 'all 0.3s ease',
-            }}
-          />
-        ))}
-      </div>
-    );
-
-    // Main app container
-    const AppContainer = ({ children }) => (
-      <div style={{
-        minHeight: '100%',
-        background: theme.bg,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        padding: '24px 20px',
-        paddingBottom: '48px',
-        fontFamily: "'DM Sans', sans-serif",
-      }}>
-        <div style={{
+    const PrimaryButton = ({ children, onClick, disabled }) => (
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        style={{
           width: '100%',
-          maxWidth: '420px',
-        }}>
-          {children}
-        </div>
-      </div>
+          padding: '16px 24px',
+          background: disabled ? theme.border : theme.accent,
+          border: 'none',
+          borderRadius: '12px',
+          fontSize: '16px',
+          fontWeight: '600',
+          color: '#FFFFFF',
+          cursor: disabled ? 'default' : 'pointer',
+          transition: 'all 0.2s ease',
+          marginTop: '8px',
+        }}
+      >
+        {children}
+      </button>
     );
 
-    // Sherpa message
+    const SecondaryButton = ({ children, onClick }) => (
+      <button
+        onClick={onClick}
+        style={{
+          padding: '12px 20px',
+          background: 'transparent',
+          border: `1.5px solid ${theme.border}`,
+          borderRadius: '12px',
+          fontSize: '14px',
+          color: theme.textSecondary,
+          cursor: 'pointer',
+          transition: 'all 0.2s ease',
+        }}
+      >
+        {children}
+      </button>
+    );
+
     const SherpaSays = ({ children, delay = 0 }) => (
       <FadeIn delay={delay}>
-        <div style={{
-          marginBottom: '24px',
-        }}>
+        <div style={{ marginBottom: '24px' }}>
           <div style={{
             fontSize: '18px',
             lineHeight: '1.6',
@@ -281,7 +226,6 @@
       </FadeIn>
     );
 
-    // Reflection box
     const ReflectionBox = ({ children }) => (
       <div style={{
         background: theme.accentLight,
@@ -299,45 +243,409 @@
       </div>
     );
 
-    // Celebration animation
-    const Celebration = ({ children }) => {
-      const [scale, setScale] = useState(0.8);
-      useEffect(() => {
-        setTimeout(() => setScale(1), 100);
-      }, []);
+    // Celebration Component
+    const CelebrationScreen = ({ onContinue, onDone, stepNumber, isFirstSession }) => {
+      const [showConfetti, setShowConfetti] = useState(true);
       
+      useEffect(() => {
+        const timer = setTimeout(() => setShowConfetti(false), 2000);
+        return () => clearTimeout(timer);
+      }, []);
+
+      const messages = isFirstSession ? {
+        title: "You did it.",
+        subtitle: "That might seem small, but most people never get this far.",
+        detail: "You just took your first step."
+      } : {
+        title: "Another step forward.",
+        subtitle: `That's ${stepNumber} steps now. You're building something.`,
+        detail: "Each one matters."
+      };
+
       return (
         <div style={{
+          minHeight: '100vh',
+          background: `linear-gradient(180deg, ${theme.celebration} 0%, ${theme.bg} 100%)`,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px 20px',
           textAlign: 'center',
-          transform: `scale(${scale})`,
-          transition: 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
         }}>
-          {children}
+          {/* Confetti particles */}
+          {showConfetti && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, pointerEvents: 'none' }}>
+              {[...Array(12)].map((_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    position: 'absolute',
+                    top: '20%',
+                    left: `${10 + (i * 7)}%`,
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: i % 2 === 0 ? '50%' : '2px',
+                    background: i % 3 === 0 ? theme.celebrationAccent : (i % 3 === 1 ? theme.accent : '#FCD34D'),
+                    animation: `confetti 1.5s ease-out ${i * 0.1}s forwards`,
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="celebrate-enter" style={{ maxWidth: '320px' }}>
+            {/* Checkmark */}
+            <div style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              background: theme.celebrationAccent,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 32px',
+              boxShadow: `0 8px 32px ${theme.celebrationAccent}40`,
+            }}>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+
+            <h1 style={{
+              fontSize: '28px',
+              fontWeight: '600',
+              color: theme.textPrimary,
+              marginBottom: '12px',
+              fontFamily: "'Source Serif 4', Georgia, serif",
+            }}>
+              {messages.title}
+            </h1>
+
+            <p style={{
+              fontSize: '16px',
+              color: theme.textSecondary,
+              lineHeight: '1.6',
+              marginBottom: '8px',
+            }}>
+              {messages.subtitle}
+            </p>
+
+            <p style={{
+              fontSize: '18px',
+              color: theme.accent,
+              fontWeight: '500',
+              marginBottom: '48px',
+            }}>
+              {messages.detail}
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+              <PrimaryButton onClick={onContinue}>
+                {isFirstSession ? "Keep going" : "What's next?"}
+              </PrimaryButton>
+              <SecondaryButton onClick={onDone}>
+                I'm good for today
+              </SecondaryButton>
+            </div>
+          </div>
         </div>
       );
     };
 
-    // Check icon SVG
-    const CheckIcon = () => (
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={theme.accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="20 6 9 17 4 12"></polyline>
-      </svg>
-    );
+    // Return Session Welcome
+    const ReturnWelcome = ({ sessionData, onContinue, onStartFresh }) => {
+      const currentStep = sessionData.completedSteps || 0;
+      const journey = microStepSequences[sessionData.branch] || microStepSequences.clarity;
+      const lastStep = journey[currentStep - 1];
+
+      return (
+        <div style={{
+          minHeight: '100vh',
+          background: theme.bg,
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '24px 20px',
+        }}>
+          <div style={{ maxWidth: '420px', margin: '0 auto', width: '100%' }}>
+            <FadeIn>
+              <p style={{
+                fontSize: '14px',
+                color: theme.textMuted,
+                marginBottom: '24px',
+              }}>
+                Welcome back
+              </p>
+            </FadeIn>
+
+            <SherpaSays delay={200}>
+              {currentStep === 1 
+                ? "Last time, you took your first step."
+                : `You've taken ${currentStep} steps so far.`
+              }
+            </SherpaSays>
+
+            {lastStep && (
+              <FadeIn delay={400}>
+                <ReflectionBox>
+                  Last step: "{lastStep.action}"
+                </ReflectionBox>
+              </FadeIn>
+            )}
+
+            <SherpaSays delay={600}>
+              How did that feel?
+            </SherpaSays>
+
+            <FadeIn delay={800}>
+              <ChoiceButton onClick={() => onContinue('good')}>
+                Good — I did it
+              </ChoiceButton>
+              <ChoiceButton onClick={() => onContinue('tried')}>
+                I tried, but something got in the way
+              </ChoiceButton>
+              <ChoiceButton onClick={() => onContinue('didnt')}>
+                I didn't get to it
+              </ChoiceButton>
+            </FadeIn>
+
+            <FadeIn delay={1000}>
+              <div style={{ marginTop: '32px', textAlign: 'center' }}>
+                <button
+                  onClick={onStartFresh}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: theme.textMuted,
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  Start fresh
+                </button>
+              </div>
+            </FadeIn>
+          </div>
+        </div>
+      );
+    };
+
+    // Stuck Support Screen
+    const StuckSupport = ({ response, sessionData, onContinue }) => {
+      const messages = {
+        tried: {
+          sherpa: "That's okay. What got in the way?",
+          options: [
+            { label: "I didn't have time", response: "smaller" },
+            { label: "I forgot", response: "reminder" },
+            { label: "It felt too hard", response: "smaller" },
+            { label: "Life happened", response: "life" },
+          ]
+        },
+        didnt: {
+          sherpa: "No judgment. Sometimes things don't happen. Would a smaller step help?",
+          options: [
+            { label: "Yes, something smaller", response: "smaller" },
+            { label: "I just need to try again", response: "retry" },
+            { label: "I'm not sure this is for me right now", response: "pause" },
+          ]
+        }
+      };
+
+      const content = messages[response] || messages.tried;
+
+      return (
+        <div style={{
+          minHeight: '100vh',
+          background: theme.bg,
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '24px 20px',
+        }}>
+          <div style={{ maxWidth: '420px', margin: '0 auto', width: '100%' }}>
+            <SherpaSays>{content.sherpa}</SherpaSays>
+
+            <FadeIn delay={300}>
+              {content.options.map((opt, i) => (
+                <ChoiceButton key={i} onClick={() => onContinue(opt.response)}>
+                  {opt.label}
+                </ChoiceButton>
+              ))}
+            </FadeIn>
+
+            <FadeIn delay={500}>
+              <p style={{
+                fontSize: '14px',
+                color: theme.textMuted,
+                textAlign: 'center',
+                marginTop: '24px',
+                fontStyle: 'italic',
+              }}>
+                You showed up. That matters.
+              </p>
+            </FadeIn>
+          </div>
+        </div>
+      );
+    };
+
+    // Next Step Screen
+    const NextStepScreen = ({ sessionData, onComplete, onMaybeLater }) => {
+      const currentStep = sessionData.completedSteps || 0;
+      const journey = microStepSequences[sessionData.branch] || microStepSequences.clarity;
+      const nextStep = journey[currentStep];
+
+      if (!nextStep) {
+        // Journey complete - ready for handoff
+        return (
+          <div style={{
+            minHeight: '100vh',
+            background: theme.bg,
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '24px 20px',
+          }}>
+            <div style={{ maxWidth: '420px', margin: '0 auto', width: '100%' }}>
+              <SherpaSays>
+                You've come a long way. {journey.length} steps. Real progress.
+              </SherpaSays>
+
+              <SherpaSays delay={300}>
+                I think you might be ready for the next level — a tool that can help you keep this going.
+              </SherpaSays>
+
+              <FadeIn delay={600}>
+                <ReflectionBox>
+                  "You're ready for this. Let me show you some options."
+                </ReflectionBox>
+              </FadeIn>
+
+              <FadeIn delay={800}>
+                <PrimaryButton onClick={() => alert('Handoff flow coming soon!')}>
+                  Show me options
+                </PrimaryButton>
+                <div style={{ marginTop: '12px' }}>
+                  <SecondaryButton onClick={onMaybeLater}>
+                    Not yet — I want to keep practicing
+                  </SecondaryButton>
+                </div>
+              </FadeIn>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div style={{
+          minHeight: '100vh',
+          background: theme.bg,
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '24px 20px',
+        }}>
+          <div style={{ maxWidth: '420px', margin: '0 auto', width: '100%' }}>
+            {/* Progress indicator */}
+            <FadeIn>
+              <div style={{
+                display: 'flex',
+                gap: '6px',
+                marginBottom: '32px',
+              }}>
+                {journey.map((_, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      flex: 1,
+                      height: '4px',
+                      borderRadius: '2px',
+                      background: i < currentStep ? theme.celebrationAccent : (i === currentStep ? theme.accent : theme.border),
+                    }}
+                  />
+                ))}
+              </div>
+            </FadeIn>
+
+            <SherpaSays>
+              Ready for your next step?
+            </SherpaSays>
+
+            <FadeIn delay={300}>
+              <div style={{
+                background: theme.bgCard,
+                border: `1.5px solid ${theme.border}`,
+                borderRadius: '16px',
+                padding: '24px',
+                marginBottom: '24px',
+                boxShadow: theme.shadow,
+              }}>
+                <p style={{
+                  fontSize: '12px',
+                  color: theme.textMuted,
+                  marginBottom: '8px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                }}>
+                  Step {nextStep.step} of {journey.length}
+                </p>
+                <p style={{
+                  fontSize: '18px',
+                  color: theme.textPrimary,
+                  lineHeight: '1.6',
+                  fontFamily: "'Source Serif 4', Georgia, serif",
+                }}>
+                  {nextStep.action}
+                </p>
+                <p style={{
+                  fontSize: '14px',
+                  color: theme.accent,
+                  marginTop: '12px',
+                }}>
+                  ⏱ {nextStep.time}
+                </p>
+              </div>
+            </FadeIn>
+
+            <SherpaSays delay={500}>
+              How does that sound?
+            </SherpaSays>
+
+            <FadeIn delay={700}>
+              <ChoiceButton onClick={onComplete}>
+                Let's do it — I'll do this now
+              </ChoiceButton>
+              <ChoiceButton onClick={() => alert('Tell me more flow coming soon!')}>
+                Tell me more
+              </ChoiceButton>
+              <ChoiceButton onClick={onMaybeLater} secondary>
+                Maybe later
+              </ChoiceButton>
+            </FadeIn>
+          </div>
+        </div>
+      );
+    };
 
     // Main App
     function App() {
-      const [screen, setScreen] = useState('welcome');
+      const [screen, setScreen] = useState('loading');
+      const [sessionData, setSessionData] = useState(null);
       const [branch, setBranch] = useState(null);
       const [openResponse, setOpenResponse] = useState('');
       const [aspiration, setAspiration] = useState(null);
       const [priority, setPriority] = useState(null);
-      const [microStepResponse, setMicroStepResponse] = useState(null);
+      const [stuckResponse, setStuckResponse] = useState(null);
 
-      // Scroll to top on screen change
+      // Check for existing session on mount
       useEffect(() => {
-        window.scrollTo(0, 0);
-        document.getElementById('root').scrollTo(0, 0);
-      }, [screen]);
+        const saved = Storage.load();
+        if (saved && saved.completedSteps > 0) {
+          setSessionData(saved);
+          setScreen('return');
+        } else {
+          setScreen('welcome');
+        }
+      }, []);
 
       // Branch data
       const branches = {
@@ -356,23 +664,23 @@
           label: "I don't know where my money goes",
           openQuestion: "When you look at your account, what surprises you?",
           escapeOptions: [
-            "The balance is always lower than I expect",
-            "I can't remember what I spent on",
-            "Small things add up without me noticing",
-            "I'm not sure where to even start looking"
+            "I make decent money but there's nothing left",
+            "Small purchases seem to add up",
+            "I avoid looking at my accounts",
+            "I just don't have a clear picture"
           ],
-          reflection: "Money comes in, but you're not sure where it goes — and that's frustrating. You want a clearer picture of what's actually happening.",
+          reflection: "Money comes in, but you're not sure where it all goes — and that's frustrating. What you want is a clearer picture of what's actually happening.",
         },
         control: {
           label: "I want to feel more in control",
           openQuestion: "What would 'in control' feel like for you?",
           escapeOptions: [
-            "Knowing I can handle unexpected expenses",
-            "Making decisions without constant stress",
+            "Knowing I could handle an unexpected expense",
+            "Not worrying about money all the time",
             "Having a plan instead of just reacting",
-            "Feeling like my money works for me"
+            "Feeling like my money works for me, not against me"
           ],
-          reflection: "You want to feel like you're driving, not just reacting to whatever comes up. You want your money working for you, not against you.",
+          reflection: "You want to feel like you're driving, not just reacting. What you want is to feel like your money is working for you, not against you.",
         },
         specific: {
           label: "Something specific is stressing me out",
@@ -380,457 +688,545 @@
           escapeOptions: [
             "Debt that feels overwhelming",
             "A big expense coming up",
-            "My income is unpredictable",
+            "A change in income (job, hours, etc.)",
             "Something else I'd rather not say yet"
           ],
-          reflection: "There's something specific weighing on you right now. You want to feel like you have a path through it — not just anxiety about it.",
+          reflection: "There's something specific weighing on you. What you want is to feel like you have a path through it.",
         },
         uncertain: {
           label: "I'm not sure — I just know something needs to change",
-          openQuestion: "What made you open this app today?",
+          openQuestion: "That's okay. What made you open this app today?",
           escapeOptions: [
-            "I've been thinking about money more lately",
+            "I saw something that made me think about my finances",
+            "I've been meaning to do something for a while",
             "Someone suggested I try this",
-            "I'm tired of how things are",
-            "I honestly don't know — just a feeling"
+            "I honestly don't know — just curious"
           ],
-          reflection: "You're not sure exactly what's going on, but something made you feel like now is the time to pay attention. You want to figure out where to start.",
+          reflection: "You're not sure exactly what's going on, but something made you feel like now is the time to pay attention. What you want is to figure out where to start.",
         },
       };
 
       const aspirations = [
-        { id: 'stress', label: "Less stress and worry" },
-        { id: 'buffer', label: "More breathing room" },
-        { id: 'pride', label: "Feeling proud of myself" },
+        { id: 'stress', label: 'Less stress and worry' },
+        { id: 'buffer', label: 'More breathing room' },
+        { id: 'pride', label: 'Feeling proud of myself' },
         { id: 'freedom', label: "Being able to do things I've put off" },
         { id: 'peace', label: "Honestly, I'd just like to stop thinking about it so much" },
       ];
 
-      const getPriorities = () => {
-        if (branch === 'clarity') {
-          return [
-            { id: 'track', label: "See where my money actually goes" },
-            { id: 'leaks', label: "Find the leaks" },
-            { id: 'explore', label: "Just explore — no pressure" },
-          ];
-        }
-        return [
-          { id: 'snapshot', label: "Get a clear picture of where I stand" },
-          { id: 'win', label: "Find one small win this week" },
-          { id: 'talk', label: "Just talk through what's going on" },
-        ];
+      const priorities = {
+        behind: [
+          "Get a clear picture of where you stand",
+          "Find one small win this week",
+          "Just talk through what's going on"
+        ],
+        clarity: [
+          "See where your money actually goes",
+          "Find the leaks",
+          "Set up a simple tracking system"
+        ],
+        control: [
+          "Start building a small cushion",
+          "Find money you didn't know you had",
+          "Make a plan for the next 30 days"
+        ],
+        specific: [
+          "Understand the full picture",
+          "Find a starting point",
+          "Make a plan to tackle it"
+        ],
+        uncertain: [
+          "Just explore — no pressure",
+          "Learn what this app can do",
+          "Talk through what's on your mind"
+        ],
       };
 
-      const getMicroStep = () => {
-        if (priority === 'track' || priority === 'leaks') {
-          return "Open your last bank statement and find one purchase that surprised you.";
-        }
-        if (priority === 'snapshot') {
-          return "Take 60 seconds to check your bank balance. Just look — no judgment.";
-        }
-        if (priority === 'win') {
-          return "Move $5 to savings right now. It's not about the amount — it's about the action.";
-        }
-        return "Tell me one thing you're curious about when it comes to money.";
+      const microSteps = {
+        behind: "Check your bank balance right now. Just look — no judgment.",
+        clarity: "Open your bank app and look at your balance. That's it.",
+        control: "Write down one thing you wish was different about money.",
+        specific: "Write down the specific thing that's stressing you out.",
+        uncertain: "Check your bank balance. Just to see where things are.",
       };
 
-      const resetDemo = () => {
-        setScreen('welcome');
+      // Save session helper
+      const saveSession = (data) => {
+        const newData = { ...sessionData, ...data };
+        setSessionData(newData);
+        Storage.save(newData);
+      };
+
+      // Handle return session check-in
+      const handleReturnCheckIn = (response) => {
+        if (response === 'good') {
+          setScreen('nextStep');
+        } else {
+          setStuckResponse(response);
+          setScreen('stuck');
+        }
+      };
+
+      // Handle stuck support response
+      const handleStuckResponse = (response) => {
+        if (response === 'pause') {
+          Storage.clear();
+          setSessionData(null);
+          setScreen('welcome');
+        } else {
+          // For all other responses, continue to next step
+          setScreen('nextStep');
+        }
+      };
+
+      // Complete a step
+      const completeStep = () => {
+        const newCompletedSteps = (sessionData?.completedSteps || 0) + 1;
+        saveSession({ completedSteps: newCompletedSteps });
+        setScreen('celebration');
+      };
+
+      // Start fresh
+      const startFresh = () => {
+        Storage.clear();
+        setSessionData(null);
         setBranch(null);
         setOpenResponse('');
         setAspiration(null);
         setPriority(null);
-        setMicroStepResponse(null);
+        setScreen('welcome');
       };
 
       // Render screens
-      const renderScreen = () => {
-        switch (screen) {
-          case 'welcome':
-            return (
+      if (screen === 'loading') {
+        return (
+          <div style={{
+            minHeight: '100vh',
+            background: theme.bg,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <div style={{ color: theme.textMuted }}>Loading...</div>
+          </div>
+        );
+      }
+
+      if (screen === 'return') {
+        return (
+          <ReturnWelcome
+            sessionData={sessionData}
+            onContinue={handleReturnCheckIn}
+            onStartFresh={startFresh}
+          />
+        );
+      }
+
+      if (screen === 'stuck') {
+        return (
+          <StuckSupport
+            response={stuckResponse}
+            sessionData={sessionData}
+            onContinue={handleStuckResponse}
+          />
+        );
+      }
+
+      if (screen === 'nextStep') {
+        return (
+          <NextStepScreen
+            sessionData={sessionData}
+            onComplete={completeStep}
+            onMaybeLater={() => setScreen('done')}
+          />
+        );
+      }
+
+      if (screen === 'celebration') {
+        const isFirst = (sessionData?.completedSteps || 0) === 1;
+        return (
+          <CelebrationScreen
+            stepNumber={sessionData?.completedSteps || 1}
+            isFirstSession={isFirst}
+            onContinue={() => setScreen('nextStep')}
+            onDone={() => setScreen('done')}
+          />
+        );
+      }
+
+      if (screen === 'done') {
+        return (
+          <div style={{
+            minHeight: '100vh',
+            background: theme.bg,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px 20px',
+            textAlign: 'center',
+          }}>
+            <FadeIn>
+              <div style={{
+                fontSize: '48px',
+                marginBottom: '24px',
+              }}>
+                👋
+              </div>
+              <h2 style={{
+                fontSize: '24px',
+                color: theme.textPrimary,
+                marginBottom: '12px',
+                fontFamily: "'Source Serif 4', Georgia, serif",
+              }}>
+                See you next time.
+              </h2>
+              <p style={{
+                fontSize: '16px',
+                color: theme.textSecondary,
+                marginBottom: '32px',
+              }}>
+                You've made progress. That's real.
+              </p>
+              <SecondaryButton onClick={() => {
+                if (sessionData?.completedSteps > 0) {
+                  setScreen('return');
+                } else {
+                  setScreen('welcome');
+                }
+              }}>
+                Come back
+              </SecondaryButton>
+            </FadeIn>
+          </div>
+        );
+      }
+
+      // First Session Flow
+      return (
+        <div style={{
+          minHeight: '100vh',
+          background: theme.bg,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          padding: '24px 20px',
+        }}>
+          <div style={{ width: '100%', maxWidth: '420px' }}>
+            
+            {/* Welcome */}
+            {screen === 'welcome' && (
               <>
-                <FadeIn delay={200}>
-                  <div style={{ 
-                    fontSize: '13px', 
-                    color: theme.textMuted, 
-                    textTransform: 'uppercase',
-                    letterSpacing: '1.5px',
-                    marginBottom: '8px',
+                <FadeIn>
+                  <h1 style={{
+                    fontSize: '32px',
+                    fontWeight: '600',
+                    color: theme.textPrimary,
+                    marginBottom: '16px',
+                    marginTop: '40px',
+                    fontFamily: "'Source Serif 4', Georgia, serif",
                   }}>
                     Financial Agency
-                  </div>
-                </FadeIn>
-                
-                <FadeIn delay={400}>
-                  <h1 style={{ 
-                    fontSize: '28px', 
-                    fontWeight: '400',
-                    fontFamily: "'Source Serif 4', Georgia, serif",
-                    color: theme.textPrimary,
-                    marginBottom: '32px',
-                    lineHeight: '1.3',
-                  }}>
-                    Before we do anything, I'd like to understand what's going on for you.
                   </h1>
                 </FadeIn>
                 
-                <FadeIn delay={600}>
-                  <p style={{ 
-                    fontSize: '16px', 
-                    color: theme.textSecondary,
-                    lineHeight: '1.6',
-                    marginBottom: '40px',
-                  }}>
-                    No judgment. No sales pitch. Just a conversation about where you are and where you want to be.
-                  </p>
-                </FadeIn>
+                <SherpaSays delay={300}>
+                  Before we do anything, I'd like to understand what's going on for you.
+                </SherpaSays>
                 
-                <FadeIn delay={800}>
+                <FadeIn delay={600}>
                   <PrimaryButton onClick={() => setScreen('choice')}>
                     Let's start
                   </PrimaryButton>
                 </FadeIn>
               </>
-            );
+            )}
 
-          case 'choice':
-            return (
+            {/* Choice Blocks */}
+            {screen === 'choice' && (
               <>
-                <ProgressDots current={0} total={6} />
                 <SherpaSays>
                   Which of these feels closest to where you are right now?
                 </SherpaSays>
                 
-                <FadeIn delay={200}>
-                  {Object.entries(branches).map(([key, data], i) => (
-                    <FadeIn key={key} delay={300 + i * 100}>
-                      <ChoiceButton
-                        selected={branch === key}
-                        onClick={() => {
-                          setBranch(key);
-                          setTimeout(() => setScreen('open'), 300);
-                        }}
-                      >
-                        {data.label}
-                      </ChoiceButton>
-                    </FadeIn>
+                <FadeIn delay={300}>
+                  {Object.entries(branches).map(([key, value]) => (
+                    <ChoiceButton
+                      key={key}
+                      onClick={() => {
+                        setBranch(key);
+                        setScreen('openQuestion');
+                      }}
+                    >
+                      {value.label}
+                    </ChoiceButton>
                   ))}
                 </FadeIn>
               </>
-            );
+            )}
 
-          case 'open':
-            return (
+            {/* Open Question */}
+            {screen === 'openQuestion' && branch && (
               <>
-                <ProgressDots current={1} total={6} />
                 <SherpaSays>
                   {branches[branch].openQuestion}
                 </SherpaSays>
                 
-                <FadeIn delay={200}>
-                  <TextInput
+                <FadeIn delay={300}>
+                  <textarea
                     value={openResponse}
-                    onChange={setOpenResponse}
-                    placeholder="Type here, or tap an option below..."
-                    onSubmit={() => setScreen('reflection')}
+                    onChange={(e) => setOpenResponse(e.target.value)}
+                    placeholder="Type here... or choose below"
+                    style={{
+                      width: '100%',
+                      minHeight: '100px',
+                      padding: '16px',
+                      border: `1.5px solid ${theme.border}`,
+                      borderRadius: '12px',
+                      fontSize: '16px',
+                      resize: 'none',
+                      marginBottom: '16px',
+                      fontFamily: 'inherit',
+                    }}
                   />
                   
-                  <div style={{ 
-                    textAlign: 'center', 
-                    margin: '16px 0',
-                    color: theme.textMuted,
+                  {openResponse.length > 10 && (
+                    <PrimaryButton onClick={() => setScreen('reflection')}>
+                      Continue
+                    </PrimaryButton>
+                  )}
+                </FadeIn>
+                
+                <FadeIn delay={500}>
+                  <p style={{
                     fontSize: '14px',
+                    color: theme.textMuted,
+                    marginTop: '24px',
+                    marginBottom: '12px',
                   }}>
-                    or choose one:
-                  </div>
+                    Or if it's hard to put into words:
+                  </p>
                   
                   {branches[branch].escapeOptions.map((option, i) => (
                     <ChoiceButton
                       key={i}
-                      subtle
                       onClick={() => {
                         setOpenResponse(option);
-                        setTimeout(() => setScreen('reflection'), 300);
+                        setScreen('reflection');
                       }}
+                      secondary
                     >
                       {option}
                     </ChoiceButton>
                   ))}
                 </FadeIn>
-                
-                {openResponse && (
-                  <FadeIn delay={0}>
-                    <PrimaryButton onClick={() => setScreen('reflection')}>
-                      Continue
-                    </PrimaryButton>
-                  </FadeIn>
-                )}
               </>
-            );
+            )}
 
-          case 'reflection':
-            return (
+            {/* Reflection */}
+            {screen === 'reflection' && branch && (
               <>
-                <ProgressDots current={2} total={6} />
                 <SherpaSays>
-                  Let me make sure I understand.
+                  Let me make sure I understand...
                 </SherpaSays>
                 
-                <FadeIn delay={300}>
+                <FadeIn delay={400}>
                   <ReflectionBox>
                     {branches[branch].reflection}
                   </ReflectionBox>
                 </FadeIn>
                 
-                <FadeIn delay={500}>
-                  <SherpaSays delay={0}>
-                    Did I get that right?
-                  </SherpaSays>
-                </FadeIn>
+                <SherpaSays delay={600}>
+                  Did I get that right?
+                </SherpaSays>
                 
-                <FadeIn delay={700}>
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <div style={{ flex: 1 }}>
-                      <PrimaryButton onClick={() => setScreen('aspiration')}>
-                        Yes, that's right
-                      </PrimaryButton>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'center', marginTop: '8px' }}>
-                    <SecondaryButton onClick={() => setScreen('open')}>
-                      Not quite — let me clarify
-                    </SecondaryButton>
-                  </div>
+                <FadeIn delay={800}>
+                  <ChoiceButton onClick={() => setScreen('aspiration')}>
+                    Yes, that's right
+                  </ChoiceButton>
+                  <ChoiceButton onClick={() => setScreen('openQuestion')} secondary>
+                    Not quite — let me clarify
+                  </ChoiceButton>
                 </FadeIn>
               </>
-            );
+            )}
 
-          case 'aspiration':
-            return (
+            {/* Aspiration */}
+            {screen === 'aspiration' && (
               <>
-                <ProgressDots current={3} total={6} />
                 <SherpaSays>
                   If things were better with money, what would feel different for you?
                 </SherpaSays>
                 
-                <FadeIn delay={200}>
-                  {aspirations.map((asp, i) => (
-                    <FadeIn key={asp.id} delay={300 + i * 100}>
-                      <ChoiceButton
-                        selected={aspiration === asp.id}
-                        onClick={() => {
-                          setAspiration(asp.id);
-                          setTimeout(() => setScreen('priority'), 300);
-                        }}
-                      >
-                        {asp.label}
-                      </ChoiceButton>
-                    </FadeIn>
+                <FadeIn delay={300}>
+                  {aspirations.map((asp) => (
+                    <ChoiceButton
+                      key={asp.id}
+                      onClick={() => {
+                        setAspiration(asp.id);
+                        setScreen('priority');
+                      }}
+                      selected={aspiration === asp.id}
+                    >
+                      {asp.label}
+                    </ChoiceButton>
                   ))}
                 </FadeIn>
               </>
-            );
+            )}
 
-          case 'priority':
-            return (
+            {/* Priority */}
+            {screen === 'priority' && branch && (
               <>
-                <ProgressDots current={4} total={6} />
                 <SherpaSays>
-                  Based on what you've shared, here are a few places we could start. What feels most important to you right now?
+                  Based on what you've shared, here are a few places we could start.
                 </SherpaSays>
                 
-                <FadeIn delay={200}>
-                  {getPriorities().map((p, i) => (
-                    <FadeIn key={p.id} delay={300 + i * 100}>
-                      <ChoiceButton
-                        selected={priority === p.id}
-                        onClick={() => {
-                          setPriority(p.id);
-                          setTimeout(() => setScreen('microstep'), 300);
-                        }}
-                      >
-                        {p.label}
-                      </ChoiceButton>
-                    </FadeIn>
+                <SherpaSays delay={300}>
+                  What feels most important to you right now?
+                </SherpaSays>
+                
+                <FadeIn delay={500}>
+                  {priorities[branch].map((p, i) => (
+                    <ChoiceButton
+                      key={i}
+                      onClick={() => {
+                        setPriority(p);
+                        setScreen('microStep');
+                      }}
+                    >
+                      {p}
+                    </ChoiceButton>
                   ))}
                 </FadeIn>
               </>
-            );
+            )}
 
-          case 'microstep':
-            return (
+            {/* Micro-step */}
+            {screen === 'microStep' && branch && (
               <>
-                <ProgressDots current={5} total={6} />
                 <SherpaSays>
-                  Here's one small thing that might help with that:
+                  Here's one small thing that might help:
                 </SherpaSays>
                 
                 <FadeIn delay={300}>
-                  <ReflectionBox>
-                    {getMicroStep()}
-                  </ReflectionBox>
+                  <div style={{
+                    background: theme.bgCard,
+                    border: `1.5px solid ${theme.border}`,
+                    borderRadius: '16px',
+                    padding: '24px',
+                    marginBottom: '24px',
+                    boxShadow: theme.shadow,
+                  }}>
+                    <p style={{
+                      fontSize: '18px',
+                      color: theme.textPrimary,
+                      lineHeight: '1.6',
+                      fontFamily: "'Source Serif 4', Georgia, serif",
+                    }}>
+                      {microSteps[branch]}
+                    </p>
+                    <p style={{
+                      fontSize: '14px',
+                      color: theme.accent,
+                      marginTop: '12px',
+                    }}>
+                      ⏱ Less than 60 seconds
+                    </p>
+                  </div>
                 </FadeIn>
                 
-                <FadeIn delay={500}>
-                  <SherpaSays delay={0}>
-                    How does that sound?
-                  </SherpaSays>
-                </FadeIn>
+                <SherpaSays delay={500}>
+                  How does that sound?
+                </SherpaSays>
                 
                 <FadeIn delay={700}>
-                  <ChoiceButton
-                    onClick={() => {
-                      setMicroStepResponse('yes');
-                      setTimeout(() => setScreen('celebration'), 300);
-                    }}
-                  >
+                  <ChoiceButton onClick={() => {
+                    // Save session data and complete first step
+                    saveSession({
+                      branch: branch,
+                      aspiration: aspiration,
+                      priority: priority,
+                      completedSteps: 1,
+                      startedAt: new Date().toISOString(),
+                    });
+                    setScreen('celebration');
+                  }}>
                     Let's do it
                   </ChoiceButton>
-                  <ChoiceButton
-                    onClick={() => {
-                      setMicroStepResponse('more');
-                      setTimeout(() => setScreen('celebration'), 300);
-                    }}
-                  >
+                  <ChoiceButton onClick={() => alert('Great question! This small step helps build momentum. Taking tiny actions builds confidence and proves to yourself that you can do this. Ready to try?')}>
                     Tell me more
                   </ChoiceButton>
-                  <ChoiceButton
-                    onClick={() => {
-                      setMicroStepResponse('later');
-                      setTimeout(() => setScreen('later'), 300);
-                    }}
-                  >
+                  <ChoiceButton onClick={() => {
+                    saveSession({
+                      branch: branch,
+                      aspiration: aspiration,
+                      priority: priority,
+                      completedSteps: 0,
+                      startedAt: new Date().toISOString(),
+                    });
+                    setScreen('maybeLater');
+                  }} secondary>
                     Maybe later
                   </ChoiceButton>
                 </FadeIn>
               </>
-            );
+            )}
 
-          case 'later':
-            return (
+            {/* Maybe Later */}
+            {screen === 'maybeLater' && (
               <>
-                <SherpaSays>
-                  No pressure at all.
-                </SherpaSays>
-                
-                <FadeIn delay={300}>
-                  <p style={{ 
-                    fontSize: '16px', 
-                    color: theme.textSecondary,
-                    lineHeight: '1.7',
-                    marginBottom: '24px',
-                  }}>
-                    You've already done something important today — you showed up and told me what's going on. That's the first step.
-                  </p>
-                </FadeIn>
-                
-                <FadeIn delay={500}>
-                  <p style={{ 
-                    fontSize: '16px', 
-                    color: theme.textSecondary,
-                    lineHeight: '1.7',
-                    marginBottom: '32px',
-                  }}>
-                    I'll be here when you're ready.
-                  </p>
-                </FadeIn>
-                
-                <FadeIn delay={700}>
-                  <ChoiceButton onClick={() => setScreen('celebration')}>
-                    Set a reminder for tomorrow
-                  </ChoiceButton>
-                  <SecondaryButton onClick={resetDemo}>
-                    Close for now
-                  </SecondaryButton>
-                </FadeIn>
-              </>
-            );
-
-          case 'celebration':
-            return (
-              <>
-                <Celebration>
-                  <FadeIn delay={200}>
-                    <div style={{
-                      width: '80px',
-                      height: '80px',
-                      background: theme.accentLight,
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      margin: '0 auto 24px',
-                    }}>
-                      <CheckIcon />
-                    </div>
-                  </FadeIn>
-                  
-                  <FadeIn delay={400}>
-                    <h2 style={{
-                      fontSize: '24px',
-                      fontFamily: "'Source Serif 4', Georgia, serif",
-                      fontWeight: '400',
+                <FadeIn>
+                  <div style={{ textAlign: 'center', marginTop: '60px' }}>
+                    <p style={{
+                      fontSize: '18px',
                       color: theme.textPrimary,
+                      lineHeight: '1.6',
+                      fontFamily: "'Source Serif 4', Georgia, serif",
                       marginBottom: '16px',
                     }}>
-                      You did it.
-                    </h2>
-                  </FadeIn>
-                  
-                  <FadeIn delay={600}>
+                      No pressure at all.
+                    </p>
                     <p style={{
                       fontSize: '16px',
                       color: theme.textSecondary,
-                      lineHeight: '1.7',
+                      lineHeight: '1.6',
+                      marginBottom: '8px',
+                    }}>
+                      You've already done something important today — you showed up and told me what's going on.
+                    </p>
+                    <p style={{
+                      fontSize: '16px',
+                      color: theme.accent,
+                      fontWeight: '500',
                       marginBottom: '32px',
                     }}>
-                      That might seem small, but most people never get this far. You just took your first step.
+                      That's the first step.
                     </p>
-                  </FadeIn>
-                  
-                  <FadeIn delay={800}>
-                    <ChoiceButton onClick={() => {
-                      alert("In the full app, this continues to your next session!");
+                    <p style={{
+                      fontSize: '14px',
+                      color: theme.textMuted,
                     }}>
-                      Keep going
-                    </ChoiceButton>
-                    <ChoiceButton onClick={resetDemo}>
-                      I'm good for today
-                    </ChoiceButton>
-                  </FadeIn>
-                </Celebration>
+                      I'll be here when you're ready.
+                    </p>
+                  </div>
+                </FadeIn>
                 
-                <FadeIn delay={1000}>
-                  <p style={{
-                    fontSize: '13px',
-                    color: theme.textMuted,
-                    textAlign: 'center',
-                    marginTop: '40px',
-                  }}>
-                    — End of First Session Demo —
-                  </p>
-                  <div style={{ textAlign: 'center', marginTop: '8px' }}>
-                    <SecondaryButton onClick={resetDemo}>
-                      Restart demo
+                <FadeIn delay={500}>
+                  <div style={{ marginTop: '48px', textAlign: 'center' }}>
+                    <SecondaryButton onClick={startFresh}>
+                      Start over
                     </SecondaryButton>
                   </div>
                 </FadeIn>
               </>
-            );
+            )}
 
-          default:
-            return null;
-        }
-      };
-
-      return (
-        <AppContainer>
-          {renderScreen()}
-        </AppContainer>
+          </div>
+        </div>
       );
     }
 
-    // Render the app
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
