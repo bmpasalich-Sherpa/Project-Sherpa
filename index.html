@@ -24,22 +24,10 @@
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.05); }
-    }
     @keyframes celebrate {
       0% { transform: scale(0.8); opacity: 0; }
       50% { transform: scale(1.1); }
       100% { transform: scale(1); opacity: 1; }
-    }
-    @keyframes confetti {
-      0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-      100% { transform: translateY(-100px) rotate(360deg); opacity: 0; }
-    }
-    @keyframes shimmer {
-      0% { background-position: -200% 0; }
-      100% { background-position: 200% 0; }
     }
     .celebrate-enter {
       animation: celebrate 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
@@ -49,7 +37,7 @@
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect } = React;
 
     // Theme
     const theme = {
@@ -60,74 +48,53 @@
       textMuted: '#B2BEC3',
       accent: '#4A6741',
       accentLight: '#E8F0E6',
-      accentHover: '#3D5636',
       border: '#E8E6E3',
       shadow: '0 2px 20px rgba(0,0,0,0.06)',
       celebration: '#F0FDF4',
       celebrationAccent: '#22C55E',
     };
 
-    // Session storage helpers
+    // Session storage
     const Storage = {
       save: (data) => {
         try {
-          localStorage.setItem('financial-agency-session', JSON.stringify(data));
-        } catch (e) {
-          console.log('Storage not available');
-        }
+          const existing = Storage.load() || {};
+          const updated = { ...existing, ...data, lastUpdated: new Date().toISOString() };
+          localStorage.setItem('financial-agency-v3', JSON.stringify(updated));
+        } catch (e) {}
       },
       load: () => {
         try {
-          const data = localStorage.getItem('financial-agency-session');
+          const data = localStorage.getItem('financial-agency-v3');
           return data ? JSON.parse(data) : null;
-        } catch (e) {
-          return null;
-        }
+        } catch (e) { return null; }
       },
       clear: () => {
-        try {
-          localStorage.removeItem('financial-agency-session');
-        } catch (e) {}
+        try { localStorage.removeItem('financial-agency-v3'); } catch (e) {}
       }
     };
 
-    // Micro-step sequences by journey type
-    const microStepSequences = {
-      behind: [
-        { step: 1, action: "Check your bank balance right now. Just look — no judgment.", time: "30 seconds" },
-        { step: 2, action: "Find one purchase from last week that surprised you.", time: "2 minutes" },
-        { step: 3, action: "Add up what you spent on food last week.", time: "5 minutes" },
-        { step: 4, action: "Move $5 to savings. Just $5.", time: "1 minute" },
-        { step: 5, action: "Set up a $20/week auto-transfer to savings.", time: "5 minutes" },
+    // Celebration messages
+    const celebrations = {
+      micro: [
+        "Nice. That's one more step forward.",
+        "That's real progress.",
+        "You just did something most people avoid.",
+        "Look at you go.",
+        "That took guts. Well done.",
+        "One step closer.",
+        "You're building something here."
       ],
-      clarity: [
-        { step: 1, action: "Open your bank app and look at your balance. That's it.", time: "30 seconds" },
-        { step: 2, action: "Scroll through last week's transactions. Notice anything?", time: "3 minutes" },
-        { step: 3, action: "Pick one category — food, subscriptions, or shopping. Add it up.", time: "5 minutes" },
-        { step: 4, action: "Cancel one subscription you forgot you had.", time: "2 minutes" },
-        { step: 5, action: "Track that one category for the next week.", time: "ongoing" },
-      ],
-      control: [
-        { step: 1, action: "Write down: 'What does being in control with money mean to me?'", time: "2 minutes" },
-        { step: 2, action: "Check your balance and say out loud: 'I have $X.'", time: "30 seconds" },
-        { step: 3, action: "List three bills and when they're due.", time: "3 minutes" },
-        { step: 4, action: "Set calendar reminders for those three bills.", time: "2 minutes" },
-        { step: 5, action: "Move $10 to savings. You decided. You did it.", time: "1 minute" },
-      ],
-      specific: [
-        { step: 1, action: "Write down the specific thing that's stressing you out.", time: "1 minute" },
-        { step: 2, action: "What's the actual number? Find out.", time: "5 minutes" },
-        { step: 3, action: "Break it into smaller pieces. What's the first piece?", time: "3 minutes" },
-        { step: 4, action: "Take one action on that first piece today.", time: "varies" },
-        { step: 5, action: "Set a reminder to check in on this tomorrow.", time: "1 minute" },
-      ],
-      uncertain: [
-        { step: 1, action: "Check your bank balance. Just to see.", time: "30 seconds" },
-        { step: 2, action: "What's one thing you wish was different about money?", time: "2 minutes" },
-        { step: 3, action: "Find one small surprise in your recent spending.", time: "3 minutes" },
-        { step: 4, action: "Move $5 somewhere — savings, a bill, anything intentional.", time: "1 minute" },
-        { step: 5, action: "Notice how that felt. Write one sentence about it.", time: "1 minute" },
-      ],
+      section: {
+        income: "You just got clear on your income. That's a big deal.",
+        spending: "You now know where your money is going. Most people never get here.",
+        savings: "You've got the full picture now. That's huge."
+      },
+      complete: [
+        "Income. Expenses. Savings. You see it now.",
+        "You did the hard part — you looked. That takes courage.",
+        "This is the foundation. Everything else builds from here."
+      ]
     };
 
     // Components
@@ -137,7 +104,6 @@
         const timer = setTimeout(() => setVisible(true), delay);
         return () => clearTimeout(timer);
       }, [delay]);
-      
       return (
         <div style={{
           opacity: visible ? 1 : 0,
@@ -149,44 +115,112 @@
       );
     };
 
-    const ChoiceButton = ({ children, onClick, selected, secondary }) => (
+    const AngSays = ({ children, delay = 0 }) => (
+      <FadeIn delay={delay}>
+        <div style={{
+          fontSize: '18px',
+          lineHeight: '1.6',
+          color: theme.textPrimary,
+          fontFamily: "'Source Serif 4', Georgia, serif",
+          marginBottom: '20px',
+        }}>
+          {children}
+        </div>
+      </FadeIn>
+    );
+
+    const TextField = ({ value, onChange, placeholder, onSubmit }) => (
+      <div style={{ marginBottom: '16px' }}>
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          style={{
+            width: '100%',
+            minHeight: '80px',
+            padding: '16px',
+            border: `1.5px solid ${theme.border}`,
+            borderRadius: '12px',
+            fontSize: '16px',
+            resize: 'none',
+            fontFamily: 'inherit',
+            background: theme.bgCard,
+          }}
+        />
+        {value && value.length > 0 && (
+          <button
+            onClick={onSubmit}
+            style={{
+              marginTop: '8px',
+              padding: '12px 24px',
+              background: theme.accent,
+              color: '#fff',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: 'pointer',
+            }}
+          >
+            Continue →
+          </button>
+        )}
+      </div>
+    );
+
+    const Suggestion = ({ children, onClick }) => (
       <button
         onClick={onClick}
         style={{
           width: '100%',
-          padding: '16px 20px',
-          marginBottom: '12px',
-          background: selected ? theme.accentLight : (secondary ? 'transparent' : theme.bgCard),
-          border: `1.5px solid ${selected ? theme.accent : theme.border}`,
+          padding: '14px 18px',
+          marginBottom: '10px',
+          background: theme.bgCard,
+          border: `1.5px solid ${theme.border}`,
           borderRadius: '12px',
-          fontSize: '16px',
-          color: selected ? theme.accent : theme.textPrimary,
+          fontSize: '15px',
+          color: theme.textPrimary,
           cursor: 'pointer',
           textAlign: 'left',
           transition: 'all 0.2s ease',
-          boxShadow: secondary ? 'none' : theme.shadow,
+          boxShadow: theme.shadow,
         }}
       >
         {children}
       </button>
     );
 
-    const PrimaryButton = ({ children, onClick, disabled }) => (
+    const SmallLink = ({ children, onClick }) => (
       <button
         onClick={onClick}
-        disabled={disabled}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          color: theme.textMuted,
+          fontSize: '14px',
+          cursor: 'pointer',
+          textDecoration: 'underline',
+          padding: '8px 0',
+        }}
+      >
+        {children}
+      </button>
+    );
+
+    const PrimaryButton = ({ children, onClick }) => (
+      <button
+        onClick={onClick}
         style={{
           width: '100%',
           padding: '16px 24px',
-          background: disabled ? theme.border : theme.accent,
+          background: theme.accent,
           border: 'none',
           borderRadius: '12px',
           fontSize: '16px',
           fontWeight: '600',
           color: '#FFFFFF',
-          cursor: disabled ? 'default' : 'pointer',
-          transition: 'all 0.2s ease',
-          marginTop: '8px',
+          cursor: 'pointer',
+          marginBottom: '10px',
         }}
       >
         {children}
@@ -197,1033 +231,1350 @@
       <button
         onClick={onClick}
         style={{
-          padding: '12px 20px',
+          width: '100%',
+          padding: '14px 20px',
           background: 'transparent',
           border: `1.5px solid ${theme.border}`,
           borderRadius: '12px',
-          fontSize: '14px',
+          fontSize: '15px',
           color: theme.textSecondary,
           cursor: 'pointer',
-          transition: 'all 0.2s ease',
+          marginBottom: '10px',
         }}
       >
         {children}
       </button>
     );
 
-    const SherpaSays = ({ children, delay = 0 }) => (
-      <FadeIn delay={delay}>
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{
-            fontSize: '18px',
-            lineHeight: '1.6',
-            color: theme.textPrimary,
-            fontFamily: "'Source Serif 4', Georgia, serif",
-          }}>
-            {children}
-          </div>
-        </div>
-      </FadeIn>
-    );
-
-    const ReflectionBox = ({ children }) => (
+    const Screen = ({ children }) => (
       <div style={{
-        background: theme.accentLight,
-        borderLeft: `3px solid ${theme.accent}`,
-        padding: '16px 20px',
-        borderRadius: '0 12px 12px 0',
-        marginBottom: '20px',
-        fontFamily: "'Source Serif 4', Georgia, serif",
-        fontSize: '16px',
-        lineHeight: '1.6',
-        color: theme.textPrimary,
-        fontStyle: 'italic',
+        minHeight: '100vh',
+        background: theme.bg,
+        padding: '24px 20px',
       }}>
-        {children}
+        <div style={{ maxWidth: '420px', margin: '0 auto' }}>
+          {children}
+        </div>
       </div>
     );
 
-    // Celebration Component
-    const CelebrationScreen = ({ onContinue, onDone, stepNumber, isFirstSession }) => {
-      const [showConfetti, setShowConfetti] = useState(true);
-      
-      useEffect(() => {
-        const timer = setTimeout(() => setShowConfetti(false), 2000);
-        return () => clearTimeout(timer);
-      }, []);
-
-      const messages = isFirstSession ? {
-        title: "You did it.",
-        subtitle: "That might seem small, but most people never get this far.",
-        detail: "You just took your first step."
-      } : {
-        title: "Another step forward.",
-        subtitle: `That's ${stepNumber} steps now. You're building something.`,
-        detail: "Each one matters."
-      };
-
-      return (
-        <div style={{
-          minHeight: '100vh',
-          background: `linear-gradient(180deg, ${theme.celebration} 0%, ${theme.bg} 100%)`,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '24px 20px',
-          textAlign: 'center',
-        }}>
-          {/* Confetti particles */}
-          {showConfetti && (
-            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, pointerEvents: 'none' }}>
-              {[...Array(12)].map((_, i) => (
-                <div
-                  key={i}
-                  style={{
-                    position: 'absolute',
-                    top: '20%',
-                    left: `${10 + (i * 7)}%`,
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: i % 2 === 0 ? '50%' : '2px',
-                    background: i % 3 === 0 ? theme.celebrationAccent : (i % 3 === 1 ? theme.accent : '#FCD34D'),
-                    animation: `confetti 1.5s ease-out ${i * 0.1}s forwards`,
-                  }}
-                />
-              ))}
-            </div>
-          )}
-
-          <div className="celebrate-enter" style={{ maxWidth: '320px' }}>
-            {/* Checkmark */}
-            <div style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              background: theme.celebrationAccent,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 32px',
-              boxShadow: `0 8px 32px ${theme.celebrationAccent}40`,
-            }}>
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            </div>
-
-            <h1 style={{
-              fontSize: '28px',
-              fontWeight: '600',
-              color: theme.textPrimary,
-              marginBottom: '12px',
-              fontFamily: "'Source Serif 4', Georgia, serif",
-            }}>
-              {messages.title}
-            </h1>
-
-            <p style={{
-              fontSize: '16px',
-              color: theme.textSecondary,
-              lineHeight: '1.6',
-              marginBottom: '8px',
-            }}>
-              {messages.subtitle}
-            </p>
-
-            <p style={{
-              fontSize: '18px',
-              color: theme.accent,
-              fontWeight: '500',
-              marginBottom: '48px',
-            }}>
-              {messages.detail}
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
-              <PrimaryButton onClick={onContinue}>
-                {isFirstSession ? "Keep going" : "What's next?"}
-              </PrimaryButton>
-              <SecondaryButton onClick={onDone}>
-                I'm good for today
-              </SecondaryButton>
-            </div>
-          </div>
-        </div>
-      );
-    };
-
-    // Return Session Welcome
-    const ReturnWelcome = ({ sessionData, onContinue, onStartFresh }) => {
-      const currentStep = sessionData.completedSteps || 0;
-      const journey = microStepSequences[sessionData.branch] || microStepSequences.clarity;
-      const lastStep = journey[currentStep - 1];
-
-      return (
-        <div style={{
-          minHeight: '100vh',
-          background: theme.bg,
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '24px 20px',
-        }}>
-          <div style={{ maxWidth: '420px', margin: '0 auto', width: '100%' }}>
-            <FadeIn>
-              <p style={{
-                fontSize: '14px',
-                color: theme.textMuted,
-                marginBottom: '24px',
-              }}>
-                Welcome back
-              </p>
-            </FadeIn>
-
-            <SherpaSays delay={200}>
-              {currentStep === 1 
-                ? "Last time, you took your first step."
-                : `You've taken ${currentStep} steps so far.`
-              }
-            </SherpaSays>
-
-            {lastStep && (
-              <FadeIn delay={400}>
-                <ReflectionBox>
-                  Last step: "{lastStep.action}"
-                </ReflectionBox>
-              </FadeIn>
-            )}
-
-            <SherpaSays delay={600}>
-              How did that feel?
-            </SherpaSays>
-
-            <FadeIn delay={800}>
-              <ChoiceButton onClick={() => onContinue('good')}>
-                Good — I did it
-              </ChoiceButton>
-              <ChoiceButton onClick={() => onContinue('tried')}>
-                I tried, but something got in the way
-              </ChoiceButton>
-              <ChoiceButton onClick={() => onContinue('didnt')}>
-                I didn't get to it
-              </ChoiceButton>
-            </FadeIn>
-
-            <FadeIn delay={1000}>
-              <div style={{ marginTop: '32px', textAlign: 'center' }}>
-                <button
-                  onClick={onStartFresh}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: theme.textMuted,
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                  }}
-                >
-                  Start fresh
-                </button>
-              </div>
-            </FadeIn>
-          </div>
-        </div>
-      );
-    };
-
-    // Stuck Support Screen
-    const StuckSupport = ({ response, sessionData, onContinue }) => {
-      const messages = {
-        tried: {
-          sherpa: "That's okay. What got in the way?",
-          options: [
-            { label: "I didn't have time", response: "smaller" },
-            { label: "I forgot", response: "reminder" },
-            { label: "It felt too hard", response: "smaller" },
-            { label: "Life happened", response: "life" },
-          ]
-        },
-        didnt: {
-          sherpa: "No judgment. Sometimes things don't happen. Would a smaller step help?",
-          options: [
-            { label: "Yes, something smaller", response: "smaller" },
-            { label: "I just need to try again", response: "retry" },
-            { label: "I'm not sure this is for me right now", response: "pause" },
-          ]
-        }
-      };
-
-      const content = messages[response] || messages.tried;
-
-      return (
-        <div style={{
-          minHeight: '100vh',
-          background: theme.bg,
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '24px 20px',
-        }}>
-          <div style={{ maxWidth: '420px', margin: '0 auto', width: '100%' }}>
-            <SherpaSays>{content.sherpa}</SherpaSays>
-
-            <FadeIn delay={300}>
-              {content.options.map((opt, i) => (
-                <ChoiceButton key={i} onClick={() => onContinue(opt.response)}>
-                  {opt.label}
-                </ChoiceButton>
-              ))}
-            </FadeIn>
-
-            <FadeIn delay={500}>
-              <p style={{
-                fontSize: '14px',
-                color: theme.textMuted,
-                textAlign: 'center',
-                marginTop: '24px',
-                fontStyle: 'italic',
-              }}>
-                You showed up. That matters.
-              </p>
-            </FadeIn>
-          </div>
-        </div>
-      );
-    };
-
-    // Next Step Screen
-    const NextStepScreen = ({ sessionData, onComplete, onMaybeLater }) => {
-      const currentStep = sessionData.completedSteps || 0;
-      const journey = microStepSequences[sessionData.branch] || microStepSequences.clarity;
-      const nextStep = journey[currentStep];
-
-      if (!nextStep) {
-        // Journey complete - ready for handoff
-        return (
+    const Placeholder = ({ title }) => (
+      <Screen>
+        <FadeIn>
           <div style={{
-            minHeight: '100vh',
-            background: theme.bg,
-            display: 'flex',
-            flexDirection: 'column',
-            padding: '24px 20px',
+            background: theme.accentLight,
+            border: `2px dashed ${theme.accent}`,
+            borderRadius: '16px',
+            padding: '40px 24px',
+            textAlign: 'center',
+            marginTop: '40px',
           }}>
-            <div style={{ maxWidth: '420px', margin: '0 auto', width: '100%' }}>
-              <SherpaSays>
-                You've come a long way. {journey.length} steps. Real progress.
-              </SherpaSays>
-
-              <SherpaSays delay={300}>
-                I think you might be ready for the next level — a tool that can help you keep this going.
-              </SherpaSays>
-
-              <FadeIn delay={600}>
-                <ReflectionBox>
-                  "You're ready for this. Let me show you some options."
-                </ReflectionBox>
-              </FadeIn>
-
-              <FadeIn delay={800}>
-                <PrimaryButton onClick={() => alert('Handoff flow coming soon!')}>
-                  Show me options
-                </PrimaryButton>
-                <div style={{ marginTop: '12px' }}>
-                  <SecondaryButton onClick={onMaybeLater}>
-                    Not yet — I want to keep practicing
-                  </SecondaryButton>
-                </div>
-              </FadeIn>
-            </div>
+            <p style={{ fontSize: '14px', color: theme.accent, marginBottom: '8px' }}>PLACEHOLDER</p>
+            <p style={{ fontSize: '18px', color: theme.textPrimary, fontWeight: '600' }}>{title}</p>
+            <p style={{ fontSize: '14px', color: theme.textSecondary, marginTop: '16px' }}>This section is coming soon.</p>
           </div>
-        );
-      }
-
-      return (
-        <div style={{
-          minHeight: '100vh',
-          background: theme.bg,
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '24px 20px',
-        }}>
-          <div style={{ maxWidth: '420px', margin: '0 auto', width: '100%' }}>
-            {/* Progress indicator */}
-            <FadeIn>
-              <div style={{
-                display: 'flex',
-                gap: '6px',
-                marginBottom: '32px',
-              }}>
-                {journey.map((_, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      flex: 1,
-                      height: '4px',
-                      borderRadius: '2px',
-                      background: i < currentStep ? theme.celebrationAccent : (i === currentStep ? theme.accent : theme.border),
-                    }}
-                  />
-                ))}
-              </div>
-            </FadeIn>
-
-            <SherpaSays>
-              Ready for your next step?
-            </SherpaSays>
-
-            <FadeIn delay={300}>
-              <div style={{
-                background: theme.bgCard,
-                border: `1.5px solid ${theme.border}`,
-                borderRadius: '16px',
-                padding: '24px',
-                marginBottom: '24px',
-                boxShadow: theme.shadow,
-              }}>
-                <p style={{
-                  fontSize: '12px',
-                  color: theme.textMuted,
-                  marginBottom: '8px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                }}>
-                  Step {nextStep.step} of {journey.length}
-                </p>
-                <p style={{
-                  fontSize: '18px',
-                  color: theme.textPrimary,
-                  lineHeight: '1.6',
-                  fontFamily: "'Source Serif 4', Georgia, serif",
-                }}>
-                  {nextStep.action}
-                </p>
-                <p style={{
-                  fontSize: '14px',
-                  color: theme.accent,
-                  marginTop: '12px',
-                }}>
-                  ⏱ {nextStep.time}
-                </p>
-              </div>
-            </FadeIn>
-
-            <SherpaSays delay={500}>
-              How does that sound?
-            </SherpaSays>
-
-            <FadeIn delay={700}>
-              <ChoiceButton onClick={onComplete}>
-                Let's do it — I'll do this now
-              </ChoiceButton>
-              <ChoiceButton onClick={() => alert('Tell me more flow coming soon!')}>
-                Tell me more
-              </ChoiceButton>
-              <ChoiceButton onClick={onMaybeLater} secondary>
-                Maybe later
-              </ChoiceButton>
-            </FadeIn>
+        </FadeIn>
+        <FadeIn delay={300}>
+          <div style={{ marginTop: '24px', textAlign: 'center' }}>
+            <SmallLink onClick={() => window.location.reload()}>Start over</SmallLink>
           </div>
-        </div>
-      );
-    };
+        </FadeIn>
+      </Screen>
+    );
 
     // Main App
     function App() {
       const [screen, setScreen] = useState('loading');
-      const [sessionData, setSessionData] = useState(null);
-      const [branch, setBranch] = useState(null);
-      const [openResponse, setOpenResponse] = useState('');
-      const [aspiration, setAspiration] = useState(null);
-      const [priority, setPriority] = useState(null);
-      const [stuckResponse, setStuckResponse] = useState(null);
+      const [session, setSession] = useState({});
+      const [textInput, setTextInput] = useState('');
 
-      // Check for existing session on mount
+      // Load session on mount
       useEffect(() => {
         const saved = Storage.load();
-        if (saved && saved.completedSteps > 0) {
-          setSessionData(saved);
+        if (saved && saved.currentStep) {
+          setSession(saved);
           setScreen('return');
         } else {
-          setScreen('welcome');
+          setScreen('entry');
         }
       }, []);
 
-      // Branch data
-      const branches = {
-        behind: {
-          label: "I feel like I'm always behind",
-          openQuestion: "What does 'behind' look like for you?",
-          escapeOptions: [
+      // Save session helper
+      const saveSession = (updates) => {
+        const updated = { ...session, ...updates };
+        setSession(updated);
+        Storage.save(updated);
+      };
+
+      // Get random celebration
+      const getRandomCelebration = () => {
+        return celebrations.micro[Math.floor(Math.random() * celebrations.micro.length)];
+      };
+
+      // ==================== SCREENS ====================
+
+      // Loading
+      if (screen === 'loading') {
+        return (
+          <Screen>
+            <div style={{ textAlign: 'center', marginTop: '40vh', color: theme.textMuted }}>
+              Loading...
+            </div>
+          </Screen>
+        );
+      }
+
+      // Return Visit
+      if (screen === 'return') {
+        const lastStep = session.lastStepName || 'getting started';
+        return (
+          <Screen>
+            <AngSays delay={100}>Welcome back.</AngSays>
+            <AngSays delay={400}>We were working on {lastStep}.</AngSays>
+            <AngSays delay={700}>Want to pick up where you left off, or start fresh?</AngSays>
+            <FadeIn delay={1000}>
+              <PrimaryButton onClick={() => setScreen(session.currentStep || 'entry')}>
+                Pick up where I left off
+              </PrimaryButton>
+              <SecondaryButton onClick={() => { Storage.clear(); setSession({}); setScreen('entry'); }}>
+                Start fresh
+              </SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Entry Screen
+      if (screen === 'entry') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Hi, I'm Ang.</AngSays>
+            <AngSays delay={600}>What's on your mind?</AngSays>
+            <FadeIn delay={900}>
+              <TextField
+                value={textInput}
+                onChange={setTextInput}
+                placeholder="I'm stressed and don't know where to start"
+                onSubmit={() => {
+                  saveSession({ entryText: textInput, currentStep: 'entry-response' });
+                  setScreen('entry-response');
+                }}
+              />
+            </FadeIn>
+            <FadeIn delay={1100}>
+              <Suggestion onClick={() => { saveSession({ entryChoice: 'behind', currentStep: 'go-deeper' }); setScreen('go-deeper'); }}>
+                I feel like I'm always behind
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ entryChoice: 'clarity', currentStep: 'go-deeper' }); setScreen('go-deeper'); }}>
+                I don't know where my money goes
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ entryChoice: 'control', currentStep: 'go-deeper' }); setScreen('go-deeper'); }}>
+                I want to feel more in control
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ entryChoice: 'specific', currentStep: 'go-deeper' }); setScreen('go-deeper'); }}>
+                Something specific is stressing me out
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ entryChoice: 'uncertain', currentStep: 'go-deeper' }); setScreen('go-deeper'); }}>
+                I'm not sure — something needs to change
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ entryChoice: 'build', currentStep: 'build-path' }); setScreen('build-path'); }}>
+                I'm ready to build toward something
+              </Suggestion>
+            </FadeIn>
+            <FadeIn delay={1300}>
+              <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                <SmallLink onClick={() => setScreen('curious-1')}>Curious who I am?</SmallLink>
+              </div>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Entry Response (after typing)
+      if (screen === 'entry-response') {
+        return (
+          <Screen>
+            <AngSays delay={100}>I hear you. Not knowing where to start — that's one of the hardest parts.</AngSays>
+            <AngSays delay={500}>Which of these feels closest to what's going on?</AngSays>
+            <FadeIn delay={800}>
+              <Suggestion onClick={() => { saveSession({ entryChoice: 'behind', currentStep: 'go-deeper' }); setScreen('go-deeper'); }}>
+                I feel like I'm always behind
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ entryChoice: 'clarity', currentStep: 'go-deeper' }); setScreen('go-deeper'); }}>
+                I don't know where my money goes
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ entryChoice: 'control', currentStep: 'go-deeper' }); setScreen('go-deeper'); }}>
+                I want to feel more in control
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ entryChoice: 'specific', currentStep: 'go-deeper' }); setScreen('go-deeper'); }}>
+                Something specific is stressing me out
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ entryChoice: 'uncertain', currentStep: 'go-deeper' }); setScreen('go-deeper'); }}>
+                I'm not sure — something needs to change
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Curious Level 1
+      if (screen === 'curious-1') {
+        return (
+          <Screen>
+            <AngSays delay={100}>I'm Ang. Money stuff is my thing — so it doesn't have to be yours.</AngSays>
+            <FadeIn delay={400}>
+              <PrimaryButton onClick={() => setScreen('entry')}>Got it</PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('curious-2')}>Tell me more</SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Curious Level 2
+      if (screen === 'curious-2') {
+        return (
+          <Screen>
+            <AngSays delay={100}>I help you figure out what's going on with your finances — and what to do about it.</AngSays>
+            <AngSays delay={400}>I won't tell you what you should be doing. I'll ask questions, listen, and help you find your own path forward.</AngSays>
+            <AngSays delay={700}>No judgment. No selling. Just support.</AngSays>
+            <FadeIn delay={1000}>
+              <PrimaryButton onClick={() => setScreen('entry')}>Got it</PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('curious-3')}>How does it work?</SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Curious Level 3
+      if (screen === 'curious-3') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Here's how I work:</AngSays>
+            <AngSays delay={300}>First, I try to understand what's going on for you. Not what I assume — what's actually true for you.</AngSays>
+            <AngSays delay={500}>Then, I help you pick one small thing to focus on. Something doable. Not a whole life overhaul.</AngSays>
+            <AngSays delay={700}>We go from there. One step at a time. I check in. I stay with you.</AngSays>
+            <AngSays delay={900}>That's it. You're in control. I'm just here to help.</AngSays>
+            <FadeIn delay={1200}>
+              <PrimaryButton onClick={() => setScreen('entry')}>Got it</PrimaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Build Path (Tier 2/3 entry)
+      if (screen === 'build-path') {
+        return (
+          <Screen>
+            <AngSays delay={100}>What would you like to build?</AngSays>
+            <FadeIn delay={400}>
+              <TextField
+                value={textInput}
+                onChange={setTextInput}
+                placeholder="I want to..."
+                onSubmit={() => setScreen('placeholder-build')}
+              />
+            </FadeIn>
+            <FadeIn delay={600}>
+              <Suggestion onClick={() => setScreen('placeholder-tier2')}>
+                A safety net for the unexpected
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('placeholder-tier3')}>
+                A path to retirement
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('placeholder-tier3')}>
+                Savings for a big goal
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('placeholder-tier3')}>
+                Wealth for my family's future
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('placeholder-build')}>
+                I'm not sure yet — I just want to start
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Go Deeper
+      if (screen === 'go-deeper') {
+        const prompts = {
+          behind: { q: "Behind. That's a heavy feeling.", q2: "What does that look like for you?", placeholder: "No matter what I do, I can't seem to catch up..." },
+          clarity: { q: "That's frustrating.", q2: "When you look at your accounts, what do you see?", placeholder: "Money comes in but I don't know where it goes..." },
+          control: { q: "I hear you.", q2: "What would being in control look like for you?", placeholder: "I just want to feel like I'm driving, not reacting..." },
+          specific: { q: "Something's weighing on you.", q2: "What's on your mind?", placeholder: "There's this one thing..." },
+          uncertain: { q: "That's okay.", q2: "What made you open this today?", placeholder: "I just felt like something needs to change..." },
+        };
+        const p = prompts[session.entryChoice] || prompts.uncertain;
+        
+        const suggestions = {
+          behind: [
             "I'm not saving like I should be",
             "I'm always catching up on bills",
             "Other people my age seem further ahead",
             "I just feel like I can't get ahead"
           ],
-          reflection: "You feel like you're running behind — like you should be further along than you are right now. And what you want is to stop feeling like you're always catching up.",
-        },
-        clarity: {
-          label: "I don't know where my money goes",
-          openQuestion: "When you look at your account, what surprises you?",
-          escapeOptions: [
+          clarity: [
             "I make decent money but there's nothing left",
             "Small purchases seem to add up",
             "I avoid looking at my accounts",
             "I just don't have a clear picture"
           ],
-          reflection: "Money comes in, but you're not sure where it all goes — and that's frustrating. What you want is a clearer picture of what's actually happening.",
-        },
-        control: {
-          label: "I want to feel more in control",
-          openQuestion: "What would 'in control' feel like for you?",
-          escapeOptions: [
+          control: [
             "Knowing I could handle an unexpected expense",
             "Not worrying about money all the time",
             "Having a plan instead of just reacting",
-            "Feeling like my money works for me, not against me"
+            "Feeling like my money works for me"
           ],
-          reflection: "You want to feel like you're driving, not just reacting. What you want is to feel like your money is working for you, not against you.",
-        },
-        specific: {
-          label: "Something specific is stressing me out",
-          openQuestion: "Tell me what's on your mind.",
-          escapeOptions: [
+          specific: [
             "Debt that feels overwhelming",
             "A big expense coming up",
-            "A change in income (job, hours, etc.)",
-            "Something else I'd rather not say yet"
+            "A change in income",
+            "Something else"
           ],
-          reflection: "There's something specific weighing on you. What you want is to feel like you have a path through it.",
-        },
-        uncertain: {
-          label: "I'm not sure — I just know something needs to change",
-          openQuestion: "That's okay. What made you open this app today?",
-          escapeOptions: [
-            "I saw something that made me think about my finances",
+          uncertain: [
+            "I saw something that made me think",
             "I've been meaning to do something for a while",
             "Someone suggested I try this",
-            "I honestly don't know — just curious"
+            "I honestly don't know"
           ],
-          reflection: "You're not sure exactly what's going on, but something made you feel like now is the time to pay attention. What you want is to figure out where to start.",
-        },
-      };
+        };
+        const s = suggestions[session.entryChoice] || suggestions.uncertain;
 
-      const aspirations = [
-        { id: 'stress', label: 'Less stress and worry' },
-        { id: 'buffer', label: 'More breathing room' },
-        { id: 'pride', label: 'Feeling proud of myself' },
-        { id: 'freedom', label: "Being able to do things I've put off" },
-        { id: 'peace', label: "Honestly, I'd just like to stop thinking about it so much" },
-      ];
-
-      const priorities = {
-        behind: [
-          "Get a clear picture of where you stand",
-          "Find one small win this week",
-          "Just talk through what's going on"
-        ],
-        clarity: [
-          "See where your money actually goes",
-          "Find the leaks",
-          "Set up a simple tracking system"
-        ],
-        control: [
-          "Start building a small cushion",
-          "Find money you didn't know you had",
-          "Make a plan for the next 30 days"
-        ],
-        specific: [
-          "Understand the full picture",
-          "Find a starting point",
-          "Make a plan to tackle it"
-        ],
-        uncertain: [
-          "Just explore — no pressure",
-          "Learn what this app can do",
-          "Talk through what's on your mind"
-        ],
-      };
-
-      const microSteps = {
-        behind: "Check your bank balance right now. Just look — no judgment.",
-        clarity: "Open your bank app and look at your balance. That's it.",
-        control: "Write down one thing you wish was different about money.",
-        specific: "Write down the specific thing that's stressing you out.",
-        uncertain: "Check your bank balance. Just to see where things are.",
-      };
-
-      // Save session helper
-      const saveSession = (data) => {
-        const newData = { ...sessionData, ...data };
-        setSessionData(newData);
-        Storage.save(newData);
-      };
-
-      // Handle return session check-in
-      const handleReturnCheckIn = (response) => {
-        if (response === 'good') {
-          setScreen('nextStep');
-        } else {
-          setStuckResponse(response);
-          setScreen('stuck');
-        }
-      };
-
-      // Handle stuck support response
-      const handleStuckResponse = (response) => {
-        if (response === 'pause') {
-          Storage.clear();
-          setSessionData(null);
-          setScreen('welcome');
-        } else {
-          // For all other responses, continue to next step
-          setScreen('nextStep');
-        }
-      };
-
-      // Complete a step
-      const completeStep = () => {
-        const newCompletedSteps = (sessionData?.completedSteps || 0) + 1;
-        saveSession({ completedSteps: newCompletedSteps });
-        setScreen('celebration');
-      };
-
-      // Start fresh
-      const startFresh = () => {
-        Storage.clear();
-        setSessionData(null);
-        setBranch(null);
-        setOpenResponse('');
-        setAspiration(null);
-        setPriority(null);
-        setScreen('welcome');
-      };
-
-      // Render screens
-      if (screen === 'loading') {
         return (
-          <div style={{
-            minHeight: '100vh',
-            background: theme.bg,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            <div style={{ color: theme.textMuted }}>Loading...</div>
-          </div>
+          <Screen>
+            <AngSays delay={100}>{p.q}</AngSays>
+            <AngSays delay={400}>{p.q2}</AngSays>
+            <FadeIn delay={700}>
+              <TextField
+                value={textInput}
+                onChange={setTextInput}
+                placeholder={p.placeholder}
+                onSubmit={() => {
+                  saveSession({ deeperText: textInput, currentStep: 'reflection', lastStepName: 'understanding your situation' });
+                  setScreen('reflection');
+                }}
+              />
+            </FadeIn>
+            <FadeIn delay={900}>
+              {s.map((suggestion, i) => (
+                <Suggestion key={i} onClick={() => {
+                  saveSession({ deeperChoice: suggestion, currentStep: 'reflection', lastStepName: 'understanding your situation' });
+                  setScreen('reflection');
+                }}>
+                  {suggestion}
+                </Suggestion>
+              ))}
+            </FadeIn>
+          </Screen>
         );
       }
 
-      if (screen === 'return') {
-        return (
-          <ReturnWelcome
-            sessionData={sessionData}
-            onContinue={handleReturnCheckIn}
-            onStartFresh={startFresh}
-          />
-        );
-      }
+      // Reflection
+      if (screen === 'reflection') {
+        const reflections = {
+          behind: "So it sounds like you're working hard but not getting ahead — and that's exhausting.",
+          clarity: "Money comes in, but you're not sure where it all goes — and that's frustrating.",
+          control: "You want to feel like you're driving, not just reacting to whatever comes up.",
+          specific: "There's something specific weighing on you. That's a lot to carry.",
+          uncertain: "You're not sure exactly what's wrong, but something made you feel like now is the time.",
+        };
+        const r = reflections[session.entryChoice] || reflections.uncertain;
 
-      if (screen === 'stuck') {
         return (
-          <StuckSupport
-            response={stuckResponse}
-            sessionData={sessionData}
-            onContinue={handleStuckResponse}
-          />
-        );
-      }
-
-      if (screen === 'nextStep') {
-        return (
-          <NextStepScreen
-            sessionData={sessionData}
-            onComplete={completeStep}
-            onMaybeLater={() => setScreen('done')}
-          />
-        );
-      }
-
-      if (screen === 'celebration') {
-        const isFirst = (sessionData?.completedSteps || 0) === 1;
-        return (
-          <CelebrationScreen
-            stepNumber={sessionData?.completedSteps || 1}
-            isFirstSession={isFirst}
-            onContinue={() => setScreen('nextStep')}
-            onDone={() => setScreen('done')}
-          />
-        );
-      }
-
-      if (screen === 'done') {
-        return (
-          <div style={{
-            minHeight: '100vh',
-            background: theme.bg,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '24px 20px',
-            textAlign: 'center',
-          }}>
-            <FadeIn>
+          <Screen>
+            <AngSays delay={100}>Let me make sure I understand.</AngSays>
+            <FadeIn delay={400}>
               <div style={{
-                fontSize: '48px',
-                marginBottom: '24px',
-              }}>
-                👋
-              </div>
-              <h2 style={{
-                fontSize: '24px',
-                color: theme.textPrimary,
-                marginBottom: '12px',
+                background: theme.accentLight,
+                borderLeft: `3px solid ${theme.accent}`,
+                padding: '16px 20px',
+                borderRadius: '0 12px 12px 0',
+                marginBottom: '20px',
                 fontFamily: "'Source Serif 4', Georgia, serif",
-              }}>
-                See you next time.
-              </h2>
-              <p style={{
                 fontSize: '16px',
-                color: theme.textSecondary,
-                marginBottom: '32px',
+                lineHeight: '1.6',
+                color: theme.textPrimary,
+                fontStyle: 'italic',
               }}>
-                You've made progress. That's real.
-              </p>
-              <SecondaryButton onClick={() => {
-                if (sessionData?.completedSteps > 0) {
-                  setScreen('return');
-                } else {
-                  setScreen('welcome');
-                }
+                {r}
+              </div>
+            </FadeIn>
+            <AngSays delay={700}>Did I get that right?</AngSays>
+            <FadeIn delay={1000}>
+              <PrimaryButton onClick={() => {
+                saveSession({ currentStep: 'aspiration', lastStepName: 'understanding your situation' });
+                setScreen('aspiration');
               }}>
-                Come back
+                Yes, that's right
+              </PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('go-deeper')}>
+                Not quite — let me clarify
               </SecondaryButton>
             </FadeIn>
-          </div>
+          </Screen>
         );
       }
 
-      // First Session Flow
+      // Aspiration
+      if (screen === 'aspiration') {
+        return (
+          <Screen>
+            <AngSays delay={100}>If things were better with money, what would feel different for you?</AngSays>
+            <FadeIn delay={400}>
+              <TextField
+                value={textInput}
+                onChange={setTextInput}
+                placeholder="I just want to feel like I'm in control..."
+                onSubmit={() => {
+                  saveSession({ aspirationText: textInput, currentStep: 'ready-check', lastStepName: 'identifying your aspiration' });
+                  setScreen('ready-check');
+                }}
+              />
+            </FadeIn>
+            <FadeIn delay={600}>
+              <Suggestion onClick={() => { saveSession({ aspiration: 'stress', currentStep: 'ready-check' }); setScreen('ready-check'); }}>
+                Less stress and worry
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ aspiration: 'buffer', currentStep: 'ready-check' }); setScreen('ready-check'); }}>
+                More breathing room
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ aspiration: 'pride', currentStep: 'ready-check' }); setScreen('ready-check'); }}>
+                Feeling proud of myself
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ aspiration: 'freedom', currentStep: 'ready-check' }); setScreen('ready-check'); }}>
+                Being able to do things I've put off
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ aspiration: 'peace', currentStep: 'ready-check' }); setScreen('ready-check'); }}>
+                Honestly, I'd just like to stop thinking about it so much
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Ready Check
+      if (screen === 'ready-check') {
+        return (
+          <Screen>
+            <AngSays delay={100}>That makes sense.</AngSays>
+            <AngSays delay={400}>Are you ready to work toward that?</AngSays>
+            <FadeIn delay={700}>
+              <Suggestion onClick={() => {
+                saveSession({ currentStep: 'choose-path', lastStepName: 'getting ready' });
+                setScreen('choose-path');
+              }}>
+                Yes, let's do it
+              </Suggestion>
+              <Suggestion onClick={() => {
+                saveSession({ currentStep: 'choose-path', lastStepName: 'getting ready' });
+                setScreen('choose-path');
+              }}>
+                I think so
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('hesitation')}>
+                I'm not sure yet
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Hesitation
+      if (screen === 'hesitation') {
+        return (
+          <Screen>
+            <AngSays delay={100}>That's okay. What would help?</AngSays>
+            <FadeIn delay={400}>
+              <TextField
+                value={textInput}
+                onChange={setTextInput}
+                placeholder="I need to understand more first..."
+                onSubmit={() => {
+                  saveSession({ currentStep: 'choose-path' });
+                  setScreen('hesitation-response');
+                }}
+              />
+            </FadeIn>
+            <FadeIn delay={600}>
+              <Suggestion onClick={() => setScreen('hesitation-response')}>
+                I need to understand more first
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('hesitation-response')}>
+                I'm scared I'll fail
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('hesitation-response')}>
+                I've tried before and it didn't work
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('pause')}>
+                I just need a minute
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Hesitation Response
+      if (screen === 'hesitation-response') {
+        return (
+          <Screen>
+            <AngSays delay={100}>That's real. What if we make it so small you can't fail?</AngSays>
+            <AngSays delay={400}>One tiny step. That's it.</AngSays>
+            <FadeIn delay={700}>
+              <PrimaryButton onClick={() => {
+                saveSession({ currentStep: 'choose-path', lastStepName: 'getting ready' });
+                setScreen('choose-path');
+              }}>
+                Okay, let's try
+              </PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('pause')}>
+                I need more time
+              </SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Pause
+      if (screen === 'pause') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Take your time. I'm here when you're ready.</AngSays>
+            <FadeIn delay={400}>
+              <div style={{ textAlign: 'center', marginTop: '40px' }}>
+                <SmallLink onClick={() => { Storage.clear(); setSession({}); setScreen('entry'); }}>
+                  Start over
+                </SmallLink>
+              </div>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Choose Path
+      if (screen === 'choose-path') {
+        return (
+          <Screen>
+            <AngSays delay={100}>There are two ways we could start.</AngSays>
+            <AngSays delay={400}>Some people like to get clear on where they stand first. Others like to start with where they want to go.</AngSays>
+            <AngSays delay={700}>What feels right for you?</AngSays>
+            <FadeIn delay={1000}>
+              <Suggestion onClick={() => {
+                saveSession({ path: 'awareness', currentStep: 'awareness-intro', lastStepName: 'choosing your path' });
+                setScreen('awareness-intro');
+              }}>
+                Let's see where I stand
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('placeholder-goal')}>
+                Let's focus on where I want to go
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Awareness Intro
+      if (screen === 'awareness-intro') {
+        return (
+          <Screen>
+            <AngSays delay={100}>The goal here is just to understand where you are. Your starting point.</AngSays>
+            <AngSays delay={400}>This isn't the time to judge or be critical. Just to see.</AngSays>
+            <AngSays delay={700}>This is often one of the most important first steps in gaining control.</AngSays>
+            <AngSays delay={1000}>There are three pieces: what's coming in, what's going out, and what you have saved.</AngSays>
+            <AngSays delay={1300}>Where do you want to start?</AngSays>
+            <FadeIn delay={1600}>
+              <Suggestion onClick={() => {
+                saveSession({ awarenessStep: 'income', currentStep: 'awareness-tool-check', lastStepName: 'understanding your income' });
+                setScreen('awareness-tool-check');
+              }}>
+                What's coming in
+              </Suggestion>
+              <Suggestion onClick={() => {
+                saveSession({ awarenessStep: 'spending', currentStep: 'awareness-tool-check', lastStepName: 'understanding your spending' });
+                setScreen('awareness-tool-check');
+              }}>
+                What's going out
+              </Suggestion>
+              <Suggestion onClick={() => {
+                saveSession({ awarenessStep: 'savings', currentStep: 'awareness-tool-check', lastStepName: 'understanding your savings' });
+                setScreen('awareness-tool-check');
+              }}>
+                What I have saved
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Awareness Tool Check
+      if (screen === 'awareness-tool-check') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Some banks have a budgeting or cashflow tool built in. Do you know if yours does?</AngSays>
+            <FadeIn delay={400}>
+              <Suggestion onClick={() => {
+                saveSession({ hasBankTool: true, currentStep: 'awareness-has-tool' });
+                setScreen('awareness-has-tool');
+              }}>
+                Yes, I have one
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('awareness-check-tool')}>
+                I'm not sure
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('awareness-tracking-method')}>
+                No, I don't think so
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Has Bank Tool
+      if (screen === 'awareness-has-tool') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Great. You can use that to see your numbers. I'll walk you through what to look for.</AngSays>
+            <FadeIn delay={400}>
+              <PrimaryButton onClick={() => {
+                const step = session.awarenessStep;
+                if (step === 'income') setScreen('income-start');
+                else if (step === 'spending') setScreen('spending-start');
+                else setScreen('savings-start');
+              }}>
+                Let's go
+              </PrimaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Check for Tool
+      if (screen === 'awareness-check-tool') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Worth checking. It's usually in your app under 'spending' or 'insights.'</AngSays>
+            <AngSays delay={400}>Take a look — I'll wait.</AngSays>
+            <FadeIn delay={700}>
+              <Suggestion onClick={() => setScreen('awareness-has-tool')}>
+                Found it
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('awareness-tracking-method')}>
+                Don't see one
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Tracking Method
+      if (screen === 'awareness-tracking-method') {
+        return (
+          <Screen>
+            <AngSays delay={100}>No problem. You can write it down, use a notes app, or I have a simple worksheet.</AngSays>
+            <AngSays delay={400}>I'm not going to ask you to share your numbers with me — this is for you.</AngSays>
+            <FadeIn delay={700}>
+              <Suggestion onClick={() => {
+                const step = session.awarenessStep;
+                saveSession({ trackingMethod: 'write' });
+                if (step === 'income') setScreen('income-start');
+                else if (step === 'spending') setScreen('spending-start');
+                else setScreen('savings-start');
+              }}>
+                I'll write it down
+              </Suggestion>
+              <Suggestion onClick={() => {
+                const step = session.awarenessStep;
+                saveSession({ trackingMethod: 'worksheet' });
+                if (step === 'income') setScreen('income-start');
+                else if (step === 'spending') setScreen('spending-start');
+                else setScreen('savings-start');
+              }}>
+                Send me the worksheet
+              </Suggestion>
+              <Suggestion onClick={() => {
+                const step = session.awarenessStep;
+                saveSession({ trackingMethod: 'own' });
+                if (step === 'income') setScreen('income-start');
+                else if (step === 'spending') setScreen('spending-start');
+                else setScreen('savings-start');
+              }}>
+                I'll use my own method
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Income Start
+      if (screen === 'income-start') {
+        return (
+          <Screen>
+            <AngSays delay={100}>First, let's look at what you have coming in. Your income.</AngSays>
+            <AngSays delay={400}>Do you know roughly what you bring home each month — after taxes?</AngSays>
+            <FadeIn delay={700}>
+              <Suggestion onClick={() => setScreen('income-know')}>
+                Yes, roughly
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('income-figure-out')}>
+                Not sure — let's figure it out
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Income - They Know
+      if (screen === 'income-know') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Great. Write that number down.</AngSays>
+            <AngSays delay={400}>Got it?</AngSays>
+            <FadeIn delay={700}>
+              <PrimaryButton onClick={() => setScreen('income-additional')}>
+                Yes
+              </PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('income-figure-out')}>
+                Actually, let me figure it out
+              </SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Income - Figure Out
+      if (screen === 'income-figure-out') {
+        return (
+          <Screen>
+            <AngSays delay={100}>No problem. Let's figure it out together.</AngSays>
+            <AngSays delay={400}>How often do you get paid?</AngSays>
+            <FadeIn delay={700}>
+              <Suggestion onClick={() => { saveSession({ payFrequency: 'twice' }); setScreen('income-lookup'); }}>
+                Twice a month
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ payFrequency: 'biweekly' }); setScreen('income-lookup'); }}>
+                Every two weeks
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ payFrequency: 'monthly' }); setScreen('income-lookup'); }}>
+                Once a month
+              </Suggestion>
+              <Suggestion onClick={() => { saveSession({ payFrequency: 'varies' }); setScreen('income-lookup'); }}>
+                It varies / irregular
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Income - Lookup
+      if (screen === 'income-lookup') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Take a look at your bank account or a recent pay stub.</AngSays>
+            <AngSays delay={400}>Write down what one paycheck looks like — after taxes.</AngSays>
+            <AngSays delay={700}>Got it?</AngSays>
+            <FadeIn delay={1000}>
+              <PrimaryButton onClick={() => setScreen('income-additional')}>
+                Yes
+              </PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('income-lookup')}>
+                Give me a minute
+              </SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Income - Additional
+      if (screen === 'income-additional') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Any other income to include? Side work, partner's income, anything else?</AngSays>
+            <FadeIn delay={400}>
+              <Suggestion onClick={() => setScreen('income-additional-yes')}>
+                Yes
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('income-complete')}>
+                No, that's it
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Income - Additional Yes
+      if (screen === 'income-additional-yes') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Write that down too.</AngSays>
+            <AngSays delay={400}>Got it?</AngSays>
+            <FadeIn delay={700}>
+              <PrimaryButton onClick={() => setScreen('income-complete')}>
+                Yes
+              </PrimaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Income Complete
+      if (screen === 'income-complete') {
+        return (
+          <Screen>
+            <AngSays delay={100}>{celebrations.section.income}</AngSays>
+            <AngSays delay={400}>You should now have your total monthly income written down.</AngSays>
+            <FadeIn delay={700}>
+              <PrimaryButton onClick={() => {
+                saveSession({ incomeComplete: true, currentStep: 'session-check-income', lastStepName: 'understanding your income' });
+                setScreen('session-check-income');
+              }}>
+                Got it
+              </PrimaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Session Check - After Income
+      if (screen === 'session-check-income') {
+        return (
+          <Screen>
+            <AngSays delay={100}>{getRandomCelebration()}</AngSays>
+            <AngSays delay={400}>Want to keep going or good for today?</AngSays>
+            <FadeIn delay={700}>
+              <PrimaryButton onClick={() => setScreen('spending-intro')}>
+                Keep going
+              </PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('good-for-today')}>
+                Good for today
+              </SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Spending Intro
+      if (screen === 'spending-intro' || screen === 'spending-start') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Now let's look at what's going out.</AngSays>
+            <AngSays delay={400}>There are two ways to look at spending.</AngSays>
+            <AngSays delay={700}>A quick total gives you the big picture. A detailed breakdown shows you where it's really going — needs, wants, and debt.</AngSays>
+            <AngSays delay={1000}>The detailed version takes more work, but most people are surprised by what they find.</AngSays>
+            <AngSays delay={1300}>Which feels right for you?</AngSays>
+            <FadeIn delay={1600}>
+              <Suggestion onClick={() => {
+                saveSession({ spendingType: 'quick', currentStep: 'spending-quick', lastStepName: 'understanding your spending' });
+                setScreen('spending-quick');
+              }}>
+                Quick total for now
+              </Suggestion>
+              <Suggestion onClick={() => {
+                saveSession({ spendingType: 'detailed', currentStep: 'spending-detailed-needs', lastStepName: 'understanding your spending' });
+                setScreen('spending-detailed-needs');
+              }}>
+                Let's do the detailed breakdown
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Spending Quick
+      if (screen === 'spending-quick') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Let's get the big picture.</AngSays>
+            <AngSays delay={400}>Look at your bank account — how much went out last month total?</AngSays>
+            <AngSays delay={700}>Write that down.</AngSays>
+            <AngSays delay={1000}>Got it?</AngSays>
+            <FadeIn delay={1300}>
+              <PrimaryButton onClick={() => setScreen('spending-quick-cc')}>
+                Yes
+              </PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('spending-quick')}>
+                Give me a minute
+              </SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Spending Quick - Credit Cards
+      if (screen === 'spending-quick-cc') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Now, do you have any credit cards?</AngSays>
+            <FadeIn delay={400}>
+              <Suggestion onClick={() => setScreen('spending-quick-cc-yes')}>
+                Yes
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('spending-complete')}>
+                No
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Spending Quick - CC Yes
+      if (screen === 'spending-quick-cc-yes') {
+        return (
+          <Screen>
+            <AngSays delay={100}>For each one, look at last month's statement. Not the minimum payment — what you actually spent that month.</AngSays>
+            <AngSays delay={400}>Write those down.</AngSays>
+            <AngSays delay={700}>Got it?</AngSays>
+            <FadeIn delay={1000}>
+              <PrimaryButton onClick={() => setScreen('spending-quick-total')}>
+                Yes
+              </PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('spending-quick-cc-yes')}>
+                Give me a minute
+              </SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Spending Quick - Total
+      if (screen === 'spending-quick-total') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Add it all up. Bank spending plus credit card spending.</AngSays>
+            <AngSays delay={400}>That's what's really going out.</AngSays>
+            <AngSays delay={700}>Got it?</AngSays>
+            <FadeIn delay={1000}>
+              <PrimaryButton onClick={() => setScreen('spending-complete')}>
+                Yes
+              </PrimaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Spending Detailed - Needs
+      if (screen === 'spending-detailed-needs') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Let's break it down so you can really see where it's going.</AngSays>
+            <AngSays delay={400}>First, your needs — the must-haves. Rent, utilities, groceries, transportation, insurance, minimum debt payments.</AngSays>
+            <AngSays delay={700}>Go through your account. Write down what you spent on needs last month.</AngSays>
+            <AngSays delay={1000}>Got it?</AngSays>
+            <FadeIn delay={1300}>
+              <PrimaryButton onClick={() => setScreen('spending-detailed-wants')}>
+                Yes
+              </PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('spending-detailed-needs')}>
+                Give me a minute
+              </SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Spending Detailed - Wants
+      if (screen === 'spending-detailed-wants') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Now the wants — everything else. Dining out, entertainment, subscriptions, shopping.</AngSays>
+            <AngSays delay={400}>Same thing — write down what you spent on wants.</AngSays>
+            <AngSays delay={700}>Got it?</AngSays>
+            <FadeIn delay={1000}>
+              <PrimaryButton onClick={() => setScreen('spending-detailed-cc')}>
+                Yes
+              </PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('spending-detailed-wants')}>
+                Give me a minute
+              </SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Spending Detailed - Credit Cards
+      if (screen === 'spending-detailed-cc') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Now credit cards. Not the payment — what you actually charged last month.</AngSays>
+            <AngSays delay={400}>And for each charge, ask yourself: need or want?</AngSays>
+            <AngSays delay={700}>Got it?</AngSays>
+            <FadeIn delay={1000}>
+              <PrimaryButton onClick={() => setScreen('spending-detailed-total')}>
+                Yes
+              </PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('spending-detailed-cc')}>
+                Give me a minute
+              </SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Spending Detailed - Total
+      if (screen === 'spending-detailed-total') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Add it up. Needs. Wants. Credit card spending.</AngSays>
+            <AngSays delay={400}>What do you see?</AngSays>
+            <FadeIn delay={700}>
+              <Suggestion onClick={() => setScreen('spending-complete')}>
+                More than I expected
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('spending-complete')}>
+                About what I thought
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('spending-complete')}>
+                Less than I expected
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Spending Complete
+      if (screen === 'spending-complete') {
+        return (
+          <Screen>
+            <AngSays delay={100}>{celebrations.section.spending}</AngSays>
+            <FadeIn delay={400}>
+              <PrimaryButton onClick={() => {
+                saveSession({ spendingComplete: true, currentStep: 'session-check-spending', lastStepName: 'understanding your spending' });
+                setScreen('session-check-spending');
+              }}>
+                Got it
+              </PrimaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Session Check - After Spending
+      if (screen === 'session-check-spending') {
+        return (
+          <Screen>
+            <AngSays delay={100}>{getRandomCelebration()}</AngSays>
+            <AngSays delay={400}>Want to keep going or good for today?</AngSays>
+            <FadeIn delay={700}>
+              <PrimaryButton onClick={() => setScreen('savings-intro')}>
+                Keep going
+              </PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('good-for-today')}>
+                Good for today
+              </SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Savings Intro
+      if (screen === 'savings-intro' || screen === 'savings-start') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Now you have the first two pieces of your cashflow — what's coming in and what's going out.</AngSays>
+            <AngSays delay={400}>The last step is understanding your savings, if you have any.</AngSays>
+            <AngSays delay={700}>Remember, no judgment. This is about getting clarity — which is a big first step in getting control.</AngSays>
+            <AngSays delay={1000}>Do you have any savings right now? A savings account, emergency fund, anything set aside?</AngSays>
+            <FadeIn delay={1300}>
+              <Suggestion onClick={() => setScreen('savings-yes')}>
+                Yes, some
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('savings-no')}>
+                Not really
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('savings-unsure')}>
+                I'm not sure
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Savings Yes
+      if (screen === 'savings-yes') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Write down the total. Doesn't have to be exact — a rough number works.</AngSays>
+            <AngSays delay={400}>Got it?</AngSays>
+            <FadeIn delay={700}>
+              <PrimaryButton onClick={() => setScreen('savings-complete')}>
+                Yes
+              </PrimaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Savings No
+      if (screen === 'savings-no') {
+        return (
+          <Screen>
+            <AngSays delay={100}>That's more common than you think. Now you know your starting point.</AngSays>
+            <FadeIn delay={400}>
+              <PrimaryButton onClick={() => setScreen('savings-complete')}>
+                Okay
+              </PrimaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Savings Unsure
+      if (screen === 'savings-unsure') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Take a look at your accounts. Anything separate from what you spend day to day?</AngSays>
+            <FadeIn delay={400}>
+              <Suggestion onClick={() => setScreen('savings-yes')}>
+                Found something
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('savings-no')}>
+                No, nothing
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Savings Complete
+      if (screen === 'savings-complete') {
+        return (
+          <Screen>
+            <AngSays delay={100}>{celebrations.section.savings}</AngSays>
+            <FadeIn delay={400}>
+              <PrimaryButton onClick={() => {
+                saveSession({ savingsComplete: true, currentStep: 'cashflow-calc', lastStepName: 'understanding your savings' });
+                setScreen('cashflow-calc');
+              }}>
+                Got it
+              </PrimaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Cashflow Calculation
+      if (screen === 'cashflow-calc') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Now let's see where you stand.</AngSays>
+            <AngSays delay={400}>Take your income. Subtract your expenses. What's left?</AngSays>
+            <FadeIn delay={700}>
+              <Suggestion onClick={() => setScreen('cashflow-positive')}>
+                There's some left over
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('cashflow-even')}>
+                It's about even
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('cashflow-negative')}>
+                I'm in the negative
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('cashflow-unsure')}>
+                I'm not sure
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Cashflow Positive
+      if (screen === 'cashflow-positive') {
+        return (
+          <Screen>
+            <AngSays delay={100}>That's your margin. That's what you can work with — savings, debt paydown, whatever matters most to you.</AngSays>
+            <FadeIn delay={400}>
+              <PrimaryButton onClick={() => setScreen('awareness-complete')}>
+                Got it
+              </PrimaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Cashflow Even
+      if (screen === 'cashflow-even') {
+        return (
+          <Screen>
+            <AngSays delay={100}>That's tight. No room for error. But now you see it — and that's where change starts.</AngSays>
+            <FadeIn delay={400}>
+              <PrimaryButton onClick={() => setScreen('awareness-complete')}>
+                Got it
+              </PrimaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Cashflow Negative
+      if (screen === 'cashflow-negative') {
+        return (
+          <Screen>
+            <AngSays delay={100}>That's hard to see. But now you know. And we can look at what might free up some room.</AngSays>
+            <FadeIn delay={400}>
+              <PrimaryButton onClick={() => setScreen('awareness-complete')}>
+                Got it
+              </PrimaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Cashflow Unsure
+      if (screen === 'cashflow-unsure') {
+        return (
+          <Screen>
+            <AngSays delay={100}>That's okay. Want to walk through it together?</AngSays>
+            <FadeIn delay={400}>
+              <PrimaryButton onClick={() => setScreen('cashflow-calc')}>
+                Yes, let's try again
+              </PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('awareness-complete')}>
+                I'll figure it out later
+              </SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Awareness Complete
+      if (screen === 'awareness-complete') {
+        const randomComplete = celebrations.complete[Math.floor(Math.random() * celebrations.complete.length)];
+        return (
+          <Screen>
+            <AngSays delay={100}>{randomComplete}</AngSays>
+            <AngSays delay={400}>Now that you see the picture, what would help most?</AngSays>
+            <FadeIn delay={700}>
+              <Suggestion onClick={() => setScreen('placeholder-next')}>
+                Find ways to free up cashflow
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('placeholder-next')}>
+                Start building savings
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('placeholder-next')}>
+                Make a plan to pay down debt
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('awareness-sit')}>
+                I need to sit with this first
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Sit With It
+      if (screen === 'awareness-sit') {
+        return (
+          <Screen>
+            <AngSays delay={100}>That makes sense. You just did a lot.</AngSays>
+            <AngSays delay={400}>When you're ready, there's more we can do together.</AngSays>
+            <AngSays delay={700}>This is the first part of a solid financial foundation.</AngSays>
+            <AngSays delay={1000}>There are two more pieces when you're ready:</AngSays>
+            <AngSays delay={1300}>Protection — making sure you're covered if life throws something at you.</AngSays>
+            <AngSays delay={1600}>Possibility — building toward what you actually want.</AngSays>
+            <FadeIn delay={1900}>
+              <Suggestion onClick={() => setScreen('placeholder-tier2')}>
+                Tell me about Protection
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('placeholder-tier3')}>
+                Tell me about Possibility
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('good-for-today')}>
+                I'm good for now
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Good For Today
+      if (screen === 'good-for-today') {
+        return (
+          <Screen>
+            <AngSays delay={100}>You did real work today. I'll be here when you're ready.</AngSays>
+            <FadeIn delay={400}>
+              <div style={{ textAlign: 'center', marginTop: '40px' }}>
+                <SmallLink onClick={() => window.location.reload()}>
+                  Come back
+                </SmallLink>
+              </div>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Handoff Screen
+      if (screen === 'handoff') {
+        return (
+          <Screen>
+            <AngSays delay={100}>While there are many budget and cashflow apps out there, I don't endorse or get paid by any.</AngSays>
+            <AngSays delay={400}>But the team has reviewed a few top-rated options, and here are a couple that work well:</AngSays>
+            <FadeIn delay={700}>
+              <Suggestion onClick={() => setScreen('handoff-ynab')}>
+                Tell me about YNAB
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('handoff-monarch')}>
+                Tell me about Monarch
+              </Suggestion>
+              <Suggestion onClick={() => setScreen('good-for-today')}>
+                I'll explore on my own
+              </Suggestion>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // YNAB Info
+      if (screen === 'handoff-ynab') {
+        return (
+          <Screen>
+            <AngSays delay={100}>YNAB stands for You Need A Budget. It's built around giving every dollar a job — you assign your money before you spend it.</AngSays>
+            <AngSays delay={400}>It takes some learning, but people who stick with it swear by it.</AngSays>
+            <AngSays delay={700}>It's $14/month or $99/year.</AngSays>
+            <FadeIn delay={1000}>
+              <PrimaryButton onClick={() => setScreen('good-for-today')}>
+                Thanks
+              </PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('handoff-monarch')}>
+                Tell me about Monarch instead
+              </SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Monarch Info
+      if (screen === 'handoff-monarch') {
+        return (
+          <Screen>
+            <AngSays delay={100}>Monarch is clean and simple. It connects to your accounts and shows you where your money is going.</AngSays>
+            <AngSays delay={400}>Good for tracking and planning. Also works well for couples.</AngSays>
+            <AngSays delay={700}>It's $15/month or $100/year.</AngSays>
+            <FadeIn delay={1000}>
+              <PrimaryButton onClick={() => setScreen('good-for-today')}>
+                Thanks
+              </PrimaryButton>
+              <SecondaryButton onClick={() => setScreen('handoff-ynab')}>
+                Tell me about YNAB instead
+              </SecondaryButton>
+            </FadeIn>
+          </Screen>
+        );
+      }
+
+      // Placeholders
+      if (screen === 'placeholder-goal') return <Placeholder title="Goal Path — Coming Soon" />;
+      if (screen === 'placeholder-tier2') return <Placeholder title="Tier 2: Protection — Coming Soon" />;
+      if (screen === 'placeholder-tier3') return <Placeholder title="Tier 3: Possibility — Coming Soon" />;
+      if (screen === 'placeholder-build') return <Placeholder title="Build Path — Coming Soon" />;
+      if (screen === 'placeholder-next') return <Placeholder title="Next Steps — Coming Soon" />;
+
+      // Fallback
       return (
-        <div style={{
-          minHeight: '100vh',
-          background: theme.bg,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          padding: '24px 20px',
-        }}>
-          <div style={{ width: '100%', maxWidth: '420px' }}>
-            
-            {/* Welcome */}
-            {screen === 'welcome' && (
-              <>
-                <FadeIn>
-                  <h1 style={{
-                    fontSize: '32px',
-                    fontWeight: '600',
-                    color: theme.textPrimary,
-                    marginBottom: '16px',
-                    marginTop: '40px',
-                    fontFamily: "'Source Serif 4', Georgia, serif",
-                  }}>
-                    Financial Agency
-                  </h1>
-                </FadeIn>
-                
-                <SherpaSays delay={300}>
-                  Before we do anything, I'd like to understand what's going on for you.
-                </SherpaSays>
-                
-                <FadeIn delay={600}>
-                  <PrimaryButton onClick={() => setScreen('choice')}>
-                    Let's start
-                  </PrimaryButton>
-                </FadeIn>
-              </>
-            )}
-
-            {/* Choice Blocks */}
-            {screen === 'choice' && (
-              <>
-                <SherpaSays>
-                  Which of these feels closest to where you are right now?
-                </SherpaSays>
-                
-                <FadeIn delay={300}>
-                  {Object.entries(branches).map(([key, value]) => (
-                    <ChoiceButton
-                      key={key}
-                      onClick={() => {
-                        setBranch(key);
-                        setScreen('openQuestion');
-                      }}
-                    >
-                      {value.label}
-                    </ChoiceButton>
-                  ))}
-                </FadeIn>
-              </>
-            )}
-
-            {/* Open Question */}
-            {screen === 'openQuestion' && branch && (
-              <>
-                <SherpaSays>
-                  {branches[branch].openQuestion}
-                </SherpaSays>
-                
-                <FadeIn delay={300}>
-                  <textarea
-                    value={openResponse}
-                    onChange={(e) => setOpenResponse(e.target.value)}
-                    placeholder="Type here... or choose below"
-                    style={{
-                      width: '100%',
-                      minHeight: '100px',
-                      padding: '16px',
-                      border: `1.5px solid ${theme.border}`,
-                      borderRadius: '12px',
-                      fontSize: '16px',
-                      resize: 'none',
-                      marginBottom: '16px',
-                      fontFamily: 'inherit',
-                    }}
-                  />
-                  
-                  {openResponse.length > 10 && (
-                    <PrimaryButton onClick={() => setScreen('reflection')}>
-                      Continue
-                    </PrimaryButton>
-                  )}
-                </FadeIn>
-                
-                <FadeIn delay={500}>
-                  <p style={{
-                    fontSize: '14px',
-                    color: theme.textMuted,
-                    marginTop: '24px',
-                    marginBottom: '12px',
-                  }}>
-                    Or if it's hard to put into words:
-                  </p>
-                  
-                  {branches[branch].escapeOptions.map((option, i) => (
-                    <ChoiceButton
-                      key={i}
-                      onClick={() => {
-                        setOpenResponse(option);
-                        setScreen('reflection');
-                      }}
-                      secondary
-                    >
-                      {option}
-                    </ChoiceButton>
-                  ))}
-                </FadeIn>
-              </>
-            )}
-
-            {/* Reflection */}
-            {screen === 'reflection' && branch && (
-              <>
-                <SherpaSays>
-                  Let me make sure I understand...
-                </SherpaSays>
-                
-                <FadeIn delay={400}>
-                  <ReflectionBox>
-                    {branches[branch].reflection}
-                  </ReflectionBox>
-                </FadeIn>
-                
-                <SherpaSays delay={600}>
-                  Did I get that right?
-                </SherpaSays>
-                
-                <FadeIn delay={800}>
-                  <ChoiceButton onClick={() => setScreen('aspiration')}>
-                    Yes, that's right
-                  </ChoiceButton>
-                  <ChoiceButton onClick={() => setScreen('openQuestion')} secondary>
-                    Not quite — let me clarify
-                  </ChoiceButton>
-                </FadeIn>
-              </>
-            )}
-
-            {/* Aspiration */}
-            {screen === 'aspiration' && (
-              <>
-                <SherpaSays>
-                  If things were better with money, what would feel different for you?
-                </SherpaSays>
-                
-                <FadeIn delay={300}>
-                  {aspirations.map((asp) => (
-                    <ChoiceButton
-                      key={asp.id}
-                      onClick={() => {
-                        setAspiration(asp.id);
-                        setScreen('priority');
-                      }}
-                      selected={aspiration === asp.id}
-                    >
-                      {asp.label}
-                    </ChoiceButton>
-                  ))}
-                </FadeIn>
-              </>
-            )}
-
-            {/* Priority */}
-            {screen === 'priority' && branch && (
-              <>
-                <SherpaSays>
-                  Based on what you've shared, here are a few places we could start.
-                </SherpaSays>
-                
-                <SherpaSays delay={300}>
-                  What feels most important to you right now?
-                </SherpaSays>
-                
-                <FadeIn delay={500}>
-                  {priorities[branch].map((p, i) => (
-                    <ChoiceButton
-                      key={i}
-                      onClick={() => {
-                        setPriority(p);
-                        setScreen('microStep');
-                      }}
-                    >
-                      {p}
-                    </ChoiceButton>
-                  ))}
-                </FadeIn>
-              </>
-            )}
-
-            {/* Micro-step */}
-            {screen === 'microStep' && branch && (
-              <>
-                <SherpaSays>
-                  Here's one small thing that might help:
-                </SherpaSays>
-                
-                <FadeIn delay={300}>
-                  <div style={{
-                    background: theme.bgCard,
-                    border: `1.5px solid ${theme.border}`,
-                    borderRadius: '16px',
-                    padding: '24px',
-                    marginBottom: '24px',
-                    boxShadow: theme.shadow,
-                  }}>
-                    <p style={{
-                      fontSize: '18px',
-                      color: theme.textPrimary,
-                      lineHeight: '1.6',
-                      fontFamily: "'Source Serif 4', Georgia, serif",
-                    }}>
-                      {microSteps[branch]}
-                    </p>
-                    <p style={{
-                      fontSize: '14px',
-                      color: theme.accent,
-                      marginTop: '12px',
-                    }}>
-                      ⏱ Less than 60 seconds
-                    </p>
-                  </div>
-                </FadeIn>
-                
-                <SherpaSays delay={500}>
-                  How does that sound?
-                </SherpaSays>
-                
-                <FadeIn delay={700}>
-                  <ChoiceButton onClick={() => {
-                    // Save session data and complete first step
-                    saveSession({
-                      branch: branch,
-                      aspiration: aspiration,
-                      priority: priority,
-                      completedSteps: 1,
-                      startedAt: new Date().toISOString(),
-                    });
-                    setScreen('celebration');
-                  }}>
-                    Let's do it
-                  </ChoiceButton>
-                  <ChoiceButton onClick={() => alert('Great question! This small step helps build momentum. Taking tiny actions builds confidence and proves to yourself that you can do this. Ready to try?')}>
-                    Tell me more
-                  </ChoiceButton>
-                  <ChoiceButton onClick={() => {
-                    saveSession({
-                      branch: branch,
-                      aspiration: aspiration,
-                      priority: priority,
-                      completedSteps: 0,
-                      startedAt: new Date().toISOString(),
-                    });
-                    setScreen('maybeLater');
-                  }} secondary>
-                    Maybe later
-                  </ChoiceButton>
-                </FadeIn>
-              </>
-            )}
-
-            {/* Maybe Later */}
-            {screen === 'maybeLater' && (
-              <>
-                <FadeIn>
-                  <div style={{ textAlign: 'center', marginTop: '60px' }}>
-                    <p style={{
-                      fontSize: '18px',
-                      color: theme.textPrimary,
-                      lineHeight: '1.6',
-                      fontFamily: "'Source Serif 4', Georgia, serif",
-                      marginBottom: '16px',
-                    }}>
-                      No pressure at all.
-                    </p>
-                    <p style={{
-                      fontSize: '16px',
-                      color: theme.textSecondary,
-                      lineHeight: '1.6',
-                      marginBottom: '8px',
-                    }}>
-                      You've already done something important today — you showed up and told me what's going on.
-                    </p>
-                    <p style={{
-                      fontSize: '16px',
-                      color: theme.accent,
-                      fontWeight: '500',
-                      marginBottom: '32px',
-                    }}>
-                      That's the first step.
-                    </p>
-                    <p style={{
-                      fontSize: '14px',
-                      color: theme.textMuted,
-                    }}>
-                      I'll be here when you're ready.
-                    </p>
-                  </div>
-                </FadeIn>
-                
-                <FadeIn delay={500}>
-                  <div style={{ marginTop: '48px', textAlign: 'center' }}>
-                    <SecondaryButton onClick={startFresh}>
-                      Start over
-                    </SecondaryButton>
-                  </div>
-                </FadeIn>
-              </>
-            )}
-
-          </div>
-        </div>
+        <Screen>
+          <AngSays>Something went wrong. Let's start over.</AngSays>
+          <FadeIn delay={300}>
+            <PrimaryButton onClick={() => { Storage.clear(); setSession({}); setScreen('entry'); }}>
+              Start over
+            </PrimaryButton>
+          </FadeIn>
+        </Screen>
       );
     }
 
